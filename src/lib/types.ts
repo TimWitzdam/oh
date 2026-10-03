@@ -11,12 +11,10 @@ export interface ModelInfo {
   license: string;
   kind: string;
   windowChars: number;
-  msPerWindow: number;
   bytes: number;
   bytesLabel: string;
   ramMb: number;
   detail: string;
-  tradeoff: string;
   installed: boolean;
   installedAt: string | null;
   /** Bytes left over from an interrupted download, if any. */

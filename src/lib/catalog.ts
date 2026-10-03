@@ -34,8 +34,6 @@ export interface ModelSpec {
   temperature?: number;
   /** Characters of text handed to the model per scoring pass. */
   windowChars: number;
-  /** Measured scoring cost per window on CPU, in milliseconds. */
-  msPerWindow: number;
   /** Token ceiling per window; windows are trimmed to this. */
   maxTokens: number;
   files: CatalogFile[];
@@ -43,7 +41,6 @@ export interface ModelSpec {
   /** Approximate resident memory once loaded, for the picker. */
   ramMb: number;
   detail: string;
-  tradeoff: string;
 }
 
 const MB = 1024 * 1024;
@@ -59,7 +56,6 @@ export const MODELS: ModelSpec[] = [
     dtype: 'int8',
     aiIndex: 1,
     windowChars: 420,
-    msPerWindow: 6,
     maxTokens: 384,
     files: [
       { path: 'config.json', bytes: 709 },
@@ -72,7 +68,6 @@ export const MODELS: ModelSpec[] = [
     bytes: 35103148,
     ramMb: 220,
     detail: '33M parameter BERT encoder, int8 quantised, loads in about a second.',
-    tradeoff: 'Weakest tier: it gives up a lot on short passages and on AI text that was edited afterwards.',
   },
   {
     id: 'chatgpt-detector-roberta-int8',
@@ -84,7 +79,6 @@ export const MODELS: ModelSpec[] = [
     dtype: 'int8',
     aiIndex: 1,
     windowChars: 560,
-    msPerWindow: 15,
     maxTokens: 512,
     files: [
       { path: 'config.json', bytes: 914 },
@@ -98,7 +92,6 @@ export const MODELS: ModelSpec[] = [
     bytes: 130672011,
     ramMb: 420,
     detail: 'RoBERTa-large encoder trained across many generators, int8 quantised.',
-    tradeoff: 'Still an encoder: it scores style, not authorship.',
   },
   {
     id: 'qwen3-06b-detector',
@@ -112,7 +105,6 @@ export const MODELS: ModelSpec[] = [
     quantize: false,
     readout: 'variable-eos',
     windowChars: 900,
-    msPerWindow: 180,
     maxTokens: 1023,
     files: [
       { path: 'config.json', bytes: 1583 },
@@ -124,7 +116,6 @@ export const MODELS: ModelSpec[] = [
     bytes: 1203565300,
     ramMb: 2_700,
     detail: 'Qwen3-0.6B detector: a fine-tuned language model reading out at the last token, with temperature scaling.',
-    tradeoff: 'Biggest and slowest tier by a wide margin: it reads each passage most carefully and is worth it when accuracy matters more than speed.',
   },
 ];
 

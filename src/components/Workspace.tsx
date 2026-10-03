@@ -9,14 +9,16 @@ import { useAnalysis } from './useAnalysis';
 
 export function Workspace({
   model,
+  models,
   threshold,
   maxWords,
-  onOpenModels,
+  onSelectModel,
 }: {
   model: ModelInfo;
+  models: ModelInfo[];
   threshold: number;
   maxWords: number;
-  onOpenModels: () => void;
+  onSelectModel: (modelId: string) => void;
 }) {
   const [text, setText] = useState('');
   const analysis = useAnalysis();
@@ -26,9 +28,8 @@ export function Workspace({
   const canRun = words >= 40 && !analysis.busy && !overLimit;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div>
-        <textarea
+    <div>
+      <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
           spellCheck={false}
@@ -54,6 +55,10 @@ export function Workspace({
             {words} {words === 1 ? 'word' : 'words'}
             {overLimit ? ` — over the ${maxWords} word limit` : ''}
           </span>
+
+          <span className="flex-1" />
+
+          <ModelSwitcher models={models} activeId={model.id} onSelect={onSelectModel} />
         </div>
 
         {overLimit ? null : words > 0 && words < 40 ? (
@@ -105,32 +110,49 @@ export function Workspace({
             threshold={threshold}
           />
         ) : null}
-      </div>
+    </div>
+  );
+}
 
-      <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-        <Panel className="p-5">
-          <h2 className="text-lg font-semibold text-ink">Detector</h2>
-          <p className="mt-2 text-base text-ink">{model.name}</p>
-          <p className="mt-1 text-sm text-ink-soft">{model.detail}</p>
-          <div className="mt-4">
-            <Button variant="plain" onClick={onOpenModels}>
-              Change or add a detector
-            </Button>
-          </div>
-        </Panel>
-
-        <Panel className="p-5">
-          <h2 className="text-lg font-semibold text-ink">How the score works</h2>
-          <p className="mt-2 text-sm text-ink-soft">
-            The text is split into sentences, grouped into overlapping windows, and each window is
-            scored on its own. Sentence scores are the average of every window that covered them,
-            so a passage never gets judged without context.
-          </p>
-          <p className="mt-3 text-sm text-ink-soft">
-            Highlights mark sentences at or above {Math.round(threshold * 100)}% machine-written.
-          </p>
-        </Panel>
-      </aside>
+/** Compact tier switcher: the three detectors, only the installed ones live. */
+function ModelSwitcher({
+  models,
+  activeId,
+  onSelect,
+}: {
+  models: ModelInfo[];
+  activeId: string;
+  onSelect: (modelId: string) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Detector"
+      className="flex items-center gap-1 rounded-lg border border-rule bg-paper-raised p-1"
+    >
+      {models.map((candidate) => {
+        const selected = candidate.id === activeId;
+        const usable = candidate.installed;
+        return (
+          <button
+            key={candidate.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={!usable}
+            onClick={() => onSelect(candidate.id)}
+            className={`focusable cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              selected
+                ? 'bg-ink text-paper'
+                : usable
+                  ? 'text-ink-soft hover:bg-paper hover:text-ink'
+                  : 'cursor-not-allowed text-ink-faint opacity-50'
+            }`}
+          >
+            {candidate.name}
+          </button>
+        );
+      })}
     </div>
   );
 }

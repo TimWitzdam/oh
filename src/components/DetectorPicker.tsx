@@ -3,12 +3,25 @@
 import type { DownloadJob } from '@/lib/downloads';
 import type { ModelInfo } from '@/lib/types';
 import { DownloadPanel } from './DownloadPanel';
-import { CheckIcon, TierIcon } from './icons';
+import { CheckIcon } from './icons';
 
 const TIER_NOTE: Record<ModelInfo['tier'], string> = {
   lite: 'Smallest and fastest',
   balanced: 'Best accuracy per megabyte',
   deep: 'Most careful, slowest',
+};
+
+const SPEED: Record<ModelInfo['tier'], string> = {
+  lite: 'Instant',
+  balanced: 'Fast',
+  deep: 'Slow',
+};
+
+/** Relative bar length for the speed row, so the three tiers stay comparable. */
+const SPEED_FRACTION: Record<ModelInfo['tier'], number> = {
+  lite: 0.08,
+  balanced: 0.2,
+  deep: 1,
 };
 
 export function DetectorPicker({
@@ -32,7 +45,6 @@ export function DetectorPicker({
 }) {
   const maxBytes = Math.max(...models.map((model) => model.bytes));
   const maxRam = Math.max(...models.map((model) => model.ramMb));
-  const maxMs = Math.max(...models.map((model) => model.msPerWindow));
 
   return (
     <div
@@ -47,7 +59,7 @@ export function DetectorPicker({
           job={latestJob(jobs, model.id) ?? partialJob(model)}
           selected={activeModelId === model.id}
           busy={busy}
-          scale={{ maxBytes, maxRam, maxMs }}
+          scale={{ maxBytes, maxRam }}
           onSelect={() => onActivate(model.id)}
           onStart={() => onStart(model.id)}
           onCancel={(jobId) => onCancel(jobId)}
@@ -73,7 +85,7 @@ function ModelCard({
   job?: DownloadJob;
   selected: boolean;
   busy: boolean;
-  scale: { maxBytes: number; maxRam: number; maxMs: number };
+  scale: { maxBytes: number; maxRam: number };
   onSelect: () => void;
   onStart: () => void;
   onCancel: (jobId: string) => void;
@@ -111,9 +123,6 @@ function ModelCard({
           {selected ? <CheckIcon className="h-3 w-3" /> : null}
         </span>
         <h3 className="text-2xl font-semibold tracking-tight text-ink">{model.name}</h3>
-        <span className="text-ink-faint">
-          <TierIcon tier={model.tier} />
-        </span>
         {selected ? (
           <span className="rounded border border-ink px-1.5 py-0.5 text-xs font-medium text-ink">
             In use
@@ -123,8 +132,7 @@ function ModelCard({
 
       <p className="mt-2 text-base text-ink-soft">{TIER_NOTE[model.tier]}</p>
 
-      <p className="mt-4 text-base text-ink">{model.detail}</p>
-      <p className="mt-2 text-base text-ink-soft">{model.tradeoff}</p>
+      <p className="mt-4 text-base text-ink-soft">{model.detail}</p>
 
       <dl className="mt-5 space-y-2.5">
         <Meter
@@ -137,11 +145,7 @@ function ModelCard({
           value={`${model.ramMb >= 1000 ? `${(model.ramMb / 1000).toFixed(1)} GB` : `${model.ramMb} MB`}`}
           fraction={model.ramMb / scale.maxRam}
         />
-        <Meter
-          label="Speed"
-          value={`${model.msPerWindow} ms/passage`}
-          fraction={model.msPerWindow / scale.maxMs}
-        />
+        <Meter label="Speed" value={SPEED[model.tier]} fraction={SPEED_FRACTION[model.tier]} />
       </dl>
 
       <div
