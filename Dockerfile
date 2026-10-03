@@ -7,7 +7,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts
 COPY . .
-RUN npm run build
+# public/ is empty and therefore absent from a fresh git checkout, so make sure
+# the runtime stage always has something to copy.
+RUN mkdir -p public \
+ && npm run build
 
 # ------------------------------------------------------------------- python ---
 # Built on the same Debian base as the runtime stage so the virtualenv links
