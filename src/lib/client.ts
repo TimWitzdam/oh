@@ -53,6 +53,26 @@ export async function unloadModel(modelId: string): Promise<boolean> {
   return data.unloaded ?? false;
 }
 
+export interface PdfText {
+  text: string;
+  pages: number;
+  truncated: boolean;
+}
+
+/** Reads the text layer out of a PDF on the server, so nothing lands in the browser bundle. */
+export async function extractPdfText(file: File): Promise<PdfText> {
+  const response = await fetch('/api/pdf', {
+    method: 'POST',
+    headers: { 'content-type': 'application/pdf' },
+    body: file,
+  });
+  const data = (await response.json().catch(() => ({}))) as Partial<PdfText> & { error?: string };
+  if (!response.ok || typeof data.text !== 'string') {
+    throw new Error(data.error ?? `pdf upload failed: ${response.status}`);
+  }
+  return { text: data.text, pages: data.pages ?? 0, truncated: data.truncated ?? false };
+}
+
 /** Streams download progress as server-sent events. */
 export async function streamDownload(
   jobId: string,

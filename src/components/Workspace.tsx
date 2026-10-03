@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
+import { extractPdfText } from '@/lib/client';
 import type { AnalysisResult, ModelInfo } from '@/lib/types';
 import { AnnotatedText } from './AnnotatedText';
-import { Button, Meter, Panel } from './primitives';
+import { Button, FileButton, Meter, Panel } from './primitives';
 import { useAnalysis } from './useAnalysis';
 
 export function Workspace({
@@ -21,11 +22,36 @@ export function Workspace({
   onSelectModel: (modelId: string) => void;
 }) {
   const [text, setText] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importNote, setImportNote] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const analysis = useAnalysis();
   const words = useMemo(() => (text.trim() ? text.trim().split(/\s+/).length : 0), [text]);
 
   const overLimit = words > maxWords;
   const canRun = words >= 40 && !analysis.busy && !overLimit;
+
+  // The PDF replaces the text rather than joining it: two documents scored as
+  // one would produce a number that belongs to neither.
+  const handlePdf = useCallback(async (file: File) => {
+    setImporting(true);
+    setImportNote(null);
+    setImportError(null);
+    try {
+      const extracted = await extractPdfText(file);
+      setText(extracted.text);
+      const count = extracted.text.trim() ? extracted.text.trim().split(/\s+/).length : 0;
+      setImportNote(
+        `${file.name} — ${extracted.pages} ${extracted.pages === 1 ? 'page' : 'pages'}, ${count} words${
+          extracted.truncated ? ', cut at the character limit' : ''
+        }.`,
+      );
+    } catch (caught) {
+      setImportError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setImporting(false);
+    }
+  }, []);
 
   return (
     <div>
@@ -34,7 +60,7 @@ export function Workspace({
           onChange={(event) => setText(event.target.value)}
           spellCheck={false}
           aria-label="Text to analyse"
-          placeholder="Paste the text you want to check. Nothing leaves this machine: the model runs locally on CPU."
+          placeholder="Paste the text you want to check, or add a PDF. Nothing leaves this machine: the model runs locally on CPU."
           className="focusable min-h-[42vh] w-full resize-y rounded-lg border border-rule bg-paper-raised p-5 text-base leading-relaxed text-ink placeholder:text-ink-faint"
         />
 
@@ -51,6 +77,13 @@ export function Workspace({
           <Button variant="quiet" onClick={() => setText('')} disabled={!text}>
             Clear
           </Button>
+          <FileButton
+            accept="application/pdf,.pdf"
+            onFile={(file) => void handlePdf(file)}
+            disabled={importing || analysis.busy}
+          >
+            {importing ? 'Reading PDF…' : 'Add PDF'}
+          </FileButton>
           <span className={`text-sm ${overLimit ? 'text-danger' : 'text-ink-soft'}`}>
             {words} {words === 1 ? 'word' : 'words'}
             {overLimit ? ` — over the ${maxWords} word limit` : ''}
@@ -64,6 +97,14 @@ export function Workspace({
         {overLimit ? null : words > 0 && words < 40 ? (
           <p className="mt-3 text-sm text-ink-soft">
             Add a little more text — scores below a paragraph are unreliable.
+          </p>
+        ) : null}
+
+        {importNote ? <p className="mt-3 text-sm text-ink-soft">{importNote}</p> : null}
+
+        {importError ? (
+          <p className="mt-3 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-base text-danger">
+            {importError}
           </p>
         ) : null}
 

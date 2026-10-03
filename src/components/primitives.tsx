@@ -28,6 +28,42 @@ export function Button({ variant = 'plain', className = '', children, ...rest }:
   );
 }
 
+/**
+ * A file picker wearing button clothes. The input lives inside the label so the
+ * pair stays one tab stop and keeps the styling of a quiet button.
+ */
+export function FileButton({
+  accept,
+  onFile,
+  disabled,
+  children,
+}: {
+  accept: string;
+  onFile: (file: File) => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <label
+      className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-3.5 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-rule hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-(--color-ink) has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-45 ${disabled ? 'pointer-events-none' : ''}`}
+    >
+      {children}
+      <input
+        type="file"
+        accept={accept}
+        disabled={disabled}
+        className="sr-only"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          // Reset first, so picking the same file twice still fires a change.
+          event.target.value = '';
+          if (file) onFile(file);
+        }}
+      />
+    </label>
+  );
+}
+
 export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`tile rounded-lg ${className}`}>{children}</div>;
 }
