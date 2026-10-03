@@ -12,9 +12,9 @@ import { useCallback, useSyncExternalStore } from 'react';
  * keeps the server's empty render and the browser's restored draft from being
  * two different versions of the same page.
  *
- * Writes are debounced so typing does not hit storage on every keystroke, and a
- * browser that refuses (private mode, full quota) is reported rather than
- * quietly losing the text.
+ * Writes are debounced so typing does not hit storage on every keystroke. A
+ * browser that refuses storage - private mode, a full quota - still gets a
+ * working box, it just does not survive a reload.
  */
 
 const KEY = 'oh:draft.v1';
@@ -22,7 +22,6 @@ const WRITE_DELAY = 400;
 
 let snapshot = '';
 let atLoad: string | null = null;
-let stored: boolean | null = null;
 let loaded = false;
 let listening = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -79,11 +78,10 @@ function write(value: string): void {
     try {
       if (value) window.localStorage.setItem(KEY, value);
       else window.localStorage.removeItem(KEY);
-      stored = true;
     } catch {
-      stored = false;
+      // Storage said no. The box keeps working; it just will not be there on a
+      // reload, and there is nowhere on the page to report that to.
     }
-    emit();
   }, WRITE_DELAY);
 }
 
@@ -92,8 +90,6 @@ export interface Draft {
   setText: (value: string) => void;
   /** The text as it was found on arrival, or null when the box started empty. */
   atLoad: string | null;
-  /** null until storage has been asked; false when it said no. */
-  stored: boolean | null;
 }
 
 export function useDraft(): Draft {
@@ -103,11 +99,6 @@ export function useDraft(): Draft {
     () => atLoad,
     () => null,
   );
-  const canStore = useSyncExternalStore(
-    subscribe,
-    () => stored,
-    () => null,
-  );
   const setText = useCallback((value: string) => write(value), []);
-  return { text, setText, atLoad: loaded, stored: canStore };
+  return { text, setText, atLoad: loaded };
 }

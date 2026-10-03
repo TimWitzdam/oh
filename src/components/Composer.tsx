@@ -8,7 +8,6 @@ import type {
 } from 'react';
 
 import { extractPdfText, readTextFile } from '@/lib/client';
-import { SAMPLES } from '@/lib/samples';
 import {
   MAX_TEXT_CHARS,
   MIN_WORDS,
@@ -18,7 +17,7 @@ import {
   tidyText,
 } from '@/lib/text';
 import type { ModelInfo } from '@/lib/types';
-import { Button, FileButton, Panel } from './primitives';
+import { Button, FileButton } from './primitives';
 import type { Draft } from './useDraft';
 
 /** What a drop or the file picker will take: a PDF, or text in some spelling. */
@@ -55,7 +54,7 @@ export function Composer({
   onCancel: () => void;
   onSelectModel: (modelId: string) => void;
 }) {
-  const { text, setText, atLoad, stored } = draft;
+  const { text, setText, atLoad } = draft;
   const [importing, setImporting] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -329,30 +328,7 @@ export function Composer({
         <ModelSwitcher models={models} activeId={model.id} onSelect={onSelectModel} />
       </div>
 
-      {empty ? (
-        <Panel className="mt-5 p-5">
-          <p className="text-base text-ink">Nothing in the box yet.</p>
-          <p className="mt-1 text-base text-ink-soft">
-            Type or paste at least {MIN_WORDS} words, drop a PDF or a text file on the box, or start
-            from one of these. Nothing leaves this machine: the model runs locally on the CPU.
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {SAMPLES.map((sample) => (
-              <button
-                key={sample.id}
-                type="button"
-                onClick={() => apply(sample.text, null)}
-                className="focusable tile tile-hover cursor-pointer rounded-md p-4 text-left"
-              >
-                <span className="block text-base font-medium text-ink">{sample.label}</span>
-                <span className="mt-1 block text-sm text-ink-soft">{sample.note}</span>
-              </button>
-            ))}
-          </div>
-        </Panel>
-      ) : null}
-
-      {!empty && short ? (
+      {empty ? null : short ? (
         <p className="mt-3 text-sm text-ink-soft">
           A paragraph is the floor here. Under {MIN_WORDS} words there is not enough text to
           compare, so the button stays out of reach.
@@ -366,12 +342,6 @@ export function Composer({
           {problem}
         </p>
       ) : null}
-
-      <p className="mt-4 text-sm text-ink-soft">
-        {stored === false
-          ? 'This browser is refusing to store the text, so a reload will lose it. Copy it somewhere safe before you analyse.'
-          : 'The box is kept in this browser between visits, so a reload will not empty it. Nothing is written to disk.'}
-      </p>
     </div>
   );
 }

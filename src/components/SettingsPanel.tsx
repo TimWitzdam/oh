@@ -72,7 +72,7 @@ export function SettingsPanel({
                     <span className="block text-base font-medium text-ink">{model.name}</span>
                     <span className="mt-0.5 block text-sm text-ink-soft">
                       {model.installed
-                        ? `about ${model.ramMb} MB RAM · ${model.license}`
+                        ? `about ${model.ramMb} MB RAM`
                         : 'Not downloaded yet'}
                     </span>
                   </button>
