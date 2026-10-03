@@ -6,6 +6,7 @@ import type { Settings } from '@/lib/catalog';
 import { fetchState, removeModel, saveSettings } from '@/lib/client';
 import type { AppState, ModelInfo } from '@/lib/types';
 import { DetectorPicker } from './DetectorPicker';
+import { Logo } from './icons';
 import { SettingsPanel } from './SettingsPanel';
 import { Button } from './primitives';
 import { useDownloads } from './useDownloads';
@@ -102,11 +103,12 @@ export function App({ initialState }: { initialState: AppState }) {
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 pb-16">
       <header className="sticky top-0 z-30 -mx-5 border-b border-rule bg-paper/95 px-5 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="group relative text-2xl font-semibold tracking-tight text-ink">
+          <h1 className="group relative flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-ink">
+            <Logo className="h-7 w-7 shrink-0 cursor-help" />
             <span
               tabIndex={0}
               aria-describedby="name-note"
-              className="cursor-help rounded-sm underline decoration-dotted decoration-rule-strong underline-offset-4"
+              className="cursor-help rounded-sm"
             >
               oh
             </span>
@@ -115,12 +117,9 @@ export function App({ initialState }: { initialState: AppState }) {
               role="tooltip"
               className="pointer-events-none absolute left-0 top-full z-40 mt-2 w-56 rounded-md border border-rule bg-paper-raised px-3 py-2 text-sm font-normal leading-snug text-ink-soft opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
             >
-              The name is the sound you make once you find out your paper was flagged.
+              is the sound you make once you find out your paper was flagged
             </span>
           </h1>
-          <span className="text-base text-ink-soft">
-            {activeModel ? `${activeModel.name} detector` : 'no detector yet'}
-          </span>
           <span className="flex-1" />
           {anyInstalled ? (
             <Button variant="quiet" onClick={() => setView(showDetectors ? 'analyze' : 'detectors')}>

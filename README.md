@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="https://i.imgur.com/LIcWf9r.png" alt="oh Logo" />
+    <img src="public/logo.svg" alt="oh Logo" width="120" height="120" />
     <h1 align="center">oh</a></h1>
     <p align="center">Self-hosted AI detector for text and pdf without GPU</p>
     <br />

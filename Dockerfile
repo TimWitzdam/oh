@@ -7,8 +7,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts
 COPY . .
-# public/ is empty and therefore absent from a fresh git checkout, so make sure
-# the runtime stage always has something to copy.
+# public/ only holds the logo, so guard the runtime stage's `COPY ./public`
+# against it ever being dropped again.
 RUN mkdir -p public \
  && npm run build \
  # next traces these two whole (see outputFileTracingIncludes in next.config.ts),
