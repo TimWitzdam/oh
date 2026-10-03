@@ -26,7 +26,7 @@ data volume, so each model is licensed by its own repository:
 | Tier | Hugging Face repo | Licence |
 | --- | --- | --- |
 | Lite | [`onnx-community/chatgpt-detector-roberta-ONNX`](https://huggingface.co/onnx-community/chatgpt-detector-roberta-ONNX) | Apache-2.0 |
-| Mid | [`rasbt/ai-text-detector-qwen3-0.6b-variable`](https://huggingface.co/rasbt/ai-text-detector-qwen3-0.6b-variable) | Apache-2.0 |
+| Balanced | [`rasbt/ai-text-detector-qwen3-0.6b-variable`](https://huggingface.co/rasbt/ai-text-detector-qwen3-0.6b-variable) | Apache-2.0 |
 | Deep | [`desklib/ai-text-detector-v1.01`](https://huggingface.co/desklib/ai-text-detector-v1.01) | MIT |
 
 Apache-2.0 requires redistribution to carry the licence and any NOTICE file
