@@ -31,7 +31,10 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 class ScoreRequest(BaseModel):
     model: str
-    texts: list[str] = Field(min_length=1, max_length=512)
+    # Must stay >= SCORE_BATCH in src/lib/detect/torch.ts, which chunks a long
+    # document into requests of exactly that size. This is a guard against a
+    # runaway body, not the limit a caller is expected to hit.
+    texts: list[str] = Field(min_length=1, max_length=64)
 
 
 @dataclass

@@ -9,6 +9,15 @@ import type { Detector, ScoreUpdate } from './types';
  * update while the remaining windows are still running.
  */
 
+/**
+ * Windows per request to the inference service. The service caps a request at
+ * the same number, so the two must move together. Batching is what makes an
+ * arbitrary text length safe to score: without it a document that segments into
+ * more windows than the cap (a table of contents or a CV, one short line per
+ * row) is rejected outright no matter how much text the route accepted.
+ */
+const SCORE_BATCH = 64;
+
 export class TorchDetector implements Detector {
   private loading: Promise<void> | null = null;
 
@@ -49,39 +58,45 @@ export class TorchDetector implements Detector {
     _batchSize: number,
   ): AsyncGenerator<ScoreUpdate> {
     await this.ready();
-    const response = await fetch(`${INFERENCE_URL}/score`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: this.spec.id, texts: windows }),
-      signal,
-    });
-    if (!response.ok) {
-      throw new Error(`inference service failed: ${await describe(response)}`);
-    }
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error('inference service returned no stream');
-    const decoder = new TextDecoder();
-    let buffer = '';
     let scored = 0;
 
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const message = JSON.parse(line) as { index?: number; ai?: number; error?: string };
-        if (message.error) throw new Error(message.error);
-        if (typeof message.index === 'number' && typeof message.ai === 'number') {
-          scored += 1;
-          yield { index: message.index, ai: message.ai };
+    for (let offset = 0; offset < windows.length; offset += SCORE_BATCH) {
+      const batch = windows.slice(offset, offset + SCORE_BATCH);
+      const response = await fetch(`${INFERENCE_URL}/score`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: this.spec.id, texts: batch }),
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`inference service failed: ${await describe(response)}`);
+      }
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('inference service returned no stream');
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const message = JSON.parse(line) as { index?: number; ai?: number; error?: string };
+          if (message.error) throw new Error(message.error);
+          if (typeof message.index === 'number' && typeof message.ai === 'number') {
+            scored += 1;
+            // The service numbers a batch from zero, so it has to be rebased
+            // onto the full window list.
+            yield { index: offset + message.index, ai: message.ai };
+          }
         }
       }
     }
 
-    // The stream can end early without an error line: the service stops when it
+    // A stream can end early without an error line: the service stops when it
     // decides the client is gone, or the connection is cut. Returning quietly
     // would leave the uncovered sentences to be scored 0.5 downstream, which
     // reads in the UI as a real "50% machine" verdict rather than a failure.

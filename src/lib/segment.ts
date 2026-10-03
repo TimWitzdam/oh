@@ -96,12 +96,23 @@ export function splitSentences(text: string): Sentence[] {
 }
 
 /**
+ * A window below this is not worth handing a detector: it is a handful of words
+ * with no context to judge. Paragraphs are still respected above it.
+ */
+const MIN_WINDOW_CHARS = 160;
+
+/**
  * Groups sentences into scoring windows.
  *
  * Three rules matter for accuracy: a window never crosses a paragraph break,
  * because detectors score a paragraph as a unit; consecutive windows overlap by
  * one sentence so boundary sentences get two opinions instead of one; and long
  * sentences are split on word boundaries rather than truncated.
+ *
+ * The paragraph break yields to a window that is still too small to score. A
+ * document written one short line per row - a table of contents, a CV, a
+ * publication list - otherwise becomes one window per line, which asks the model
+ * to judge three words at a time and costs a full round of inference per line.
  */
 export function buildWindows(
   sentences: Sentence[],
@@ -139,7 +150,7 @@ export function buildWindows(
       continue;
     }
 
-    if (sentence.breakBefore && current.length > 0) {
+    if (sentence.breakBefore && current.length > 0 && chars >= MIN_WINDOW_CHARS) {
       flush(false);
     }
 
