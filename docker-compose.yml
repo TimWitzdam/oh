@@ -1,0 +1,27 @@
+services:
+  oh:
+    build: .
+    image: oh:latest
+    container_name: oh
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      - oh-data:/data
+    environment:
+      OH_DATA_DIR: /data
+      # Lower this on small hosts; it caps torch's thread pool.
+      OMP_NUM_THREADS: '4'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  oh-data:

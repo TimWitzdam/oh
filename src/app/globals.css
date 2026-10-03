@@ -1,0 +1,93 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-local), ui-monospace, monospace;
+
+  --color-paper: #f7f5f0;
+  --color-paper-raised: #fffdf9;
+  --color-ink: #16150f;
+  --color-ink-soft: #4a4740;
+  --color-ink-faint: #7c776c;
+  --color-rule: #ddd8cc;
+  --color-rule-strong: #b9b2a2;
+  --color-machine: #b4441a;
+  --color-machine-soft: #f2ddd3;
+  --color-human: #2f5d50;
+  --color-human-soft: #dbe8e3;
+  --color-warn: #8a6a12;
+  --color-warn-soft: #f6ecc9;
+  --color-danger: #a02b2b;
+  --color-danger-soft: #f6dede;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='radio']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv05', 'ss03';
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--color-machine-soft);
+  }
+
+  textarea {
+    field-sizing: content;
+  }
+}
+
+@layer components {
+  .rule {
+    border-color: var(--color-rule);
+  }
+
+  .tile {
+    background: var(--color-paper-raised);
+    border: 1px solid var(--color-rule);
+  }
+
+  .tile-hover {
+    transition: border-color 120ms ease, background-color 120ms ease;
+  }
+
+  .tile-hover:hover {
+    border-color: var(--color-rule-strong);
+  }
+
+  .focusable {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+
+  .focusable:focus-visible {
+    outline-color: var(--color-ink);
+  }
+
+  .sentence {
+    border-radius: 3px;
+    padding: 1px 0;
+    transition: background-color 120ms ease;
+  }
+
+  .sentence-flagged {
+    box-shadow: inset 0 -2px 0 0 var(--color-machine);
+  }
+}

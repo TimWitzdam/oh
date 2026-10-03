@@ -1,0 +1,6 @@
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+transformers==5.18.0
+# Install this from the CPU wheel index to avoid pulling CUDA libraries:
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+torch==2.14.1

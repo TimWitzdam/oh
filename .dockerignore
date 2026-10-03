@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.gitignore
+data
+scripts
+README.md
+docker-compose.yml
+service/.venv
+**/__pycache__
+**/*.pyc
+.env*
