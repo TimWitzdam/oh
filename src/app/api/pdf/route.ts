@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { extractText, getDocumentProxy } from 'unpdf';
 
+import { MAX_TEXT_CHARS } from '@/lib/text';
+
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 /** Generous enough for a scanned manuscript, small enough to keep RAM in check. */
 const MAX_BYTES = 40 * 1024 * 1024;
-/** Same ceiling POST /api/analyze enforces, so imported text always fits. */
-const MAX_CHARS = 400_000;
 
 /** Pulls the text layer out of a PDF so it can be scored like pasted text. */
 export async function POST(request: Request) {
@@ -48,8 +48,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const truncated = text.length > MAX_CHARS;
-  if (truncated) text = text.slice(0, MAX_CHARS);
+  // Cut at the same ceiling POST /api/analyze enforces, so imported text always fits.
+  const truncated = text.length > MAX_TEXT_CHARS;
+  if (truncated) text = text.slice(0, MAX_TEXT_CHARS);
   text = text.replace(/\r\n/g, '\n').trim();
 
   // A PDF of nothing but page images has no text layer to read. OCR first.

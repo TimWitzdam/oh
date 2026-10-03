@@ -42,6 +42,12 @@ export interface ModelSpec {
   threshold: number;
   /** Characters of text handed to the model per scoring pass. */
   windowChars: number;
+  /**
+   * Measured words per second on the reference host (see the README tables).
+   * The composer uses it to say how long a run will take before it starts,
+   * which is the difference between waiting and wondering.
+   */
+  wordsPerSecond: number;
   /** Token ceiling per window; windows are trimmed to this. */
   maxTokens: number;
   files: CatalogFile[];
@@ -67,6 +73,7 @@ export const MODELS: ModelSpec[] = [
     // unseen human documents. 0.99 holds the false-positive rate near 6%.
     threshold: 0.99,
     windowChars: 560,
+    wordsPerSecond: 3900,
     maxTokens: 512,
     files: [
       { path: 'config.json', bytes: 914 },
@@ -98,6 +105,7 @@ export const MODELS: ModelSpec[] = [
     // it saturates so hard that half of human documents come back above 0.9.
     threshold: 0.5,
     windowChars: 900,
+    wordsPerSecond: 195,
     maxTokens: 1023,
     files: [
       { path: 'config.json', bytes: 1583 },
@@ -128,6 +136,7 @@ export const MODELS: ModelSpec[] = [
     // positives on unseen domains were 12%.
     threshold: 0.9,
     windowChars: 900,
+    wordsPerSecond: 172,
     maxTokens: 512,
     files: [
       { path: 'config.json', bytes: 890 },

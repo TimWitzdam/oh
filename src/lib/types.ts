@@ -11,6 +11,8 @@ export interface ModelInfo {
   license: string;
   kind: string;
   windowChars: number;
+  /** Measured throughput, so the UI can say how long a run will take. */
+  wordsPerSecond: number;
   bytes: number;
   bytesLabel: string;
   ramMb: number;

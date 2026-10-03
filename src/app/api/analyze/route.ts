@@ -4,11 +4,10 @@ import { findModel } from '@/lib/catalog';
 import { activeInFlight, analyze } from '@/lib/analyze';
 import { inspectInstall } from '@/lib/models';
 import { readSettings } from '@/lib/store';
+import { MAX_TEXT_CHARS } from '@/lib/text';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 3600;
-
-const MAX_CHARS = 400_000;
 
 export async function POST(request: Request) {
   let text = '';
@@ -26,9 +25,9 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (text.length > MAX_CHARS) {
+  if (text.length > MAX_TEXT_CHARS) {
     return NextResponse.json(
-      { error: `Text is too long (${text.length} characters, limit ${MAX_CHARS}).` },
+      { error: `Text is too long (${text.length} characters, limit ${MAX_TEXT_CHARS}).` },
       { status: 413 },
     );
   }

@@ -17,7 +17,8 @@ is the sound you make once you find out your paper was flagged.
 
 - Automated install using Docker
 - Choose between three AI detection models
-- Analyze text and PDF files
+- Analyze text and PDF files: paste, drop a file on the box, or add a PDF
+- Your text stays in the browser between visits, and never leaves the machine
 - Runs entirely on your CPU, no GPU and no accounts
 
 ## Hardware Requirements

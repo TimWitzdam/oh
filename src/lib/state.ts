@@ -23,6 +23,7 @@ export async function loadState(): Promise<AppState> {
         license: spec.license,
         kind: spec.kind,
         windowChars: spec.windowChars,
+        wordsPerSecond: spec.wordsPerSecond,
         bytes: spec.bytes,
         bytesLabel: formatBytes(spec.bytes),
         ramMb: spec.ramMb,

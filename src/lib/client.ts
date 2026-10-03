@@ -1,5 +1,6 @@
 'use client';
 
+import { MAX_TEXT_CHARS, MIN_WORDS, countWords, tidyText } from './text';
 import type { AnalysisEvent, AppState } from './types';
 import type { DownloadJob } from './downloads';
 
@@ -65,6 +66,46 @@ export async function extractPdfText(file: File): Promise<PdfText> {
     throw new Error(data.error ?? `pdf upload failed: ${response.status}`);
   }
   return { text: data.text, pages: data.pages ?? 0, truncated: data.truncated ?? false };
+}
+
+/** Plain text has nothing to parse, so it never has to leave the browser. */
+const MAX_TEXT_FILE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Reads a .txt or .md file as text, tidied and capped the same way the server
+ * would have done it. Two files that are not text are caught here rather than
+ * scored: one that decodes into NUL bytes is a .docx wearing the wrong name,
+ * and one full of replacement characters was saved in a single-byte encoding
+ * this browser cannot read.
+ */
+export async function readTextFile(file: File): Promise<{ text: string; truncated: boolean }> {
+  if (file.size > MAX_TEXT_FILE_BYTES) {
+    throw new Error(
+      `That file is larger than the ${MAX_TEXT_FILE_BYTES / 1024 / 1024} MB limit for text.`,
+    );
+  }
+
+  const { text: cleaned } = tidyText(await file.text());
+  if (cleaned.includes('\u0000') || countWords(cleaned) === 0) {
+    throw new Error(
+      'That file did not read as text. Export it as .txt or .md, or drop the PDF itself.',
+    );
+  }
+  const mangled = (cleaned.match(/\ufffd/g)?.length ?? 0) / cleaned.length;
+  if (mangled > 0.01) {
+    throw new Error(
+      'That file is not in a readable text encoding. Re-save it as UTF-8 plain text, or drop the PDF.',
+    );
+  }
+
+  const truncated = cleaned.length > MAX_TEXT_CHARS;
+  const text = truncated ? cleaned.slice(0, MAX_TEXT_CHARS) : cleaned;
+  if (countWords(text) < MIN_WORDS) {
+    throw new Error(
+      `That file held fewer than ${MIN_WORDS} words, and a score needs a paragraph to say anything.`,
+    );
+  }
+  return { text, truncated };
 }
 
 /** Streams download progress as server-sent events. */

@@ -5,6 +5,7 @@ import { throwIfAborted } from './detect/onnx';
 import type { Detector } from './detect/types';
 import { stripFormatting } from './normalize';
 import { buildWindows, splitSentences } from './segment';
+import { countWords } from './text';
 
 let inflight = 0;
 
@@ -185,9 +186,3 @@ function summarize(
     segments,
   };
 }
-
-function countWords(text: string): number {
-  const trimmed = text.trim();
-  return trimmed ? trimmed.split(/\s+/).length : 0;
-}
-

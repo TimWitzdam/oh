@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { extractPdfText } from '@/lib/client';
-import type { AnalysisResult, ModelInfo, SegmentResult } from '@/lib/types';
+import { MIN_WORDS, countWords } from '@/lib/text';
+import type { AnalysisResult, ModelInfo } from '@/lib/types';
 import { AnnotatedText } from './AnnotatedText';
-import { Button, FileButton, Hint, Meter, Panel } from './primitives';
+import { Composer } from './Composer';
+import { Button, Hint, Meter, Panel } from './primitives';
 import { useAnalysis } from './useAnalysis';
+import { useDraft } from './useDraft';
 
 export function Workspace({
   model,
@@ -21,179 +23,66 @@ export function Workspace({
   maxWords: number;
   onSelectModel: (modelId: string) => void;
 }) {
-  const [text, setText] = useState('');
-  const [importing, setImporting] = useState(false);
-  const [importNote, setImportNote] = useState<string | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
+  const draft = useDraft();
   const analysis = useAnalysis();
-  const words = useMemo(() => (text.trim() ? text.trim().split(/\s+/).length : 0), [text]);
-
-  const overLimit = words > maxWords;
-  const canRun = words >= 40 && !analysis.busy && !overLimit;
-
-  // The PDF replaces the text rather than joining it: two documents scored as
-  // one would produce a number that belongs to neither.
-  const handlePdf = useCallback(async (file: File) => {
-    setImporting(true);
-    setImportNote(null);
-    setImportError(null);
-    try {
-      const extracted = await extractPdfText(file);
-      setText(extracted.text);
-      const count = extracted.text.trim() ? extracted.text.trim().split(/\s+/).length : 0;
-      setImportNote(
-        `${file.name} — ${extracted.pages} ${extracted.pages === 1 ? 'page' : 'pages'}, ${count} words${
-          extracted.truncated ? ', cut at the character limit' : ''
-        }.`,
-      );
-    } catch (caught) {
-      setImportError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setImporting(false);
-    }
-  }, []);
+  const words = useMemo(() => countWords(draft.text), [draft.text]);
 
   return (
     <div>
-      <textarea
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          spellCheck={false}
-          aria-label="Text to analyse"
-          placeholder="Paste the text you want to check, or add a PDF. Nothing leaves this machine: the model runs locally on CPU."
-          className="focusable min-h-[42vh] w-full resize-y rounded-lg border border-rule bg-paper-raised p-5 text-base leading-relaxed text-ink placeholder:text-ink-faint"
-        />
+      <Composer
+        model={model}
+        models={models}
+        maxWords={maxWords}
+        draft={draft}
+        busy={analysis.busy}
+        onRun={analysis.run}
+        onCancel={analysis.cancel}
+        onSelectModel={onSelectModel}
+      />
 
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          {analysis.busy ? (
-            <Button variant="plain" onClick={analysis.cancel}>
-              Cancel analysis
-            </Button>
-          ) : (
-            <Button variant="primary" onClick={() => analysis.run(text)} disabled={!canRun}>
-              Analyse text
-            </Button>
-          )}
-          <Button variant="quiet" onClick={() => setText('')} disabled={!text}>
-            Clear
-          </Button>
-          <FileButton
-            accept="application/pdf,.pdf"
-            onFile={(file) => void handlePdf(file)}
-            disabled={importing || analysis.busy}
-          >
-            {importing ? 'Reading PDF…' : 'Add PDF'}
-          </FileButton>
-          <span className={`text-sm ${overLimit ? 'text-danger' : 'text-ink-soft'}`}>
-            {words} {words === 1 ? 'word' : 'words'}
-            {overLimit ? ` — over the ${maxWords} word limit` : ''}
-          </span>
+      {analysis.phase === 'error' && analysis.error ? (
+        <p className="mt-4 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-base text-danger">
+          {analysis.error}
+        </p>
+      ) : null}
 
-          <span className="flex-1" />
-
-          <ModelSwitcher models={models} activeId={model.id} onSelect={onSelectModel} />
-        </div>
-
-        {overLimit ? null : words > 0 && words < 40 ? (
-          <p className="mt-3 text-sm text-ink-soft">
-            Add a little more text — scores below a paragraph are unreliable.
+      {analysis.busy ? (
+        <Panel className="mt-6 p-5">
+          <p className="text-base text-ink">
+            {analysis.phase === 'loading'
+              ? 'Loading the model into memory…'
+              : `Scoring window ${Math.min(analysis.progress.done + 1, analysis.progress.total)} of ${analysis.progress.total}`}
           </p>
-        ) : null}
-
-        {importNote ? <p className="mt-3 text-sm text-ink-soft">{importNote}</p> : null}
-
-        {importError ? (
-          <p className="mt-3 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-base text-danger">
-            {importError}
-          </p>
-        ) : null}
-
-        {analysis.phase === 'error' && analysis.error ? (
-          <p className="mt-4 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-base text-danger">
-            {analysis.error}
-          </p>
-        ) : null}
-
-        {analysis.busy ? (
-          <Panel className="mt-6 p-5">
-            <p className="text-base text-ink">
-              {analysis.phase === 'loading'
-                ? 'Loading the model into memory…'
-                : `Scoring window ${Math.min(analysis.progress.done + 1, analysis.progress.total)} of ${analysis.progress.total}`}
+          <div className="mt-3">
+            <Meter
+              value={
+                analysis.progress.total > 0
+                  ? analysis.progress.done / analysis.progress.total
+                  : 0.02
+              }
+            />
+          </div>
+          {analysis.scores.length > 0 ? (
+            <p className="mt-3 text-sm text-ink-soft">
+              {analysis.scores
+                .slice(-6)
+                .map((score) => `${Math.round(score.ai * 100)}%`)
+                .join('  ')}
             </p>
-            <div className="mt-3">
-              <Meter
-                value={
-                  analysis.progress.total > 0
-                    ? analysis.progress.done / analysis.progress.total
-                    : 0.02
-                }
-              />
-            </div>
-            {analysis.scores.length > 0 ? (
-              <p className="mt-3 text-sm text-ink-soft">
-                {analysis.scores
-                  .slice(-6)
-                  .map((score) => `${Math.round(score.ai * 100)}%`)
-                  .join('  ')}
-              </p>
-            ) : null}
-          </Panel>
-        ) : null}
+          ) : null}
+        </Panel>
+      ) : null}
 
-        {analysis.result ? (
-          <ResultPanel
-            result={analysis.result}
-            text={analysis.analyzedText}
-            stale={analysis.analyzedText !== text}
-            onReanalyse={() => analysis.run(text)}
-            canReanalyse={!analysis.busy && words >= 40 && !overLimit}
-            threshold={threshold}
-          />
-        ) : null}
-    </div>
-  );
-}
-
-/** Compact tier switcher: the three detectors, only the installed ones live. */
-function ModelSwitcher({
-  models,
-  activeId,
-  onSelect,
-}: {
-  models: ModelInfo[];
-  activeId: string;
-  onSelect: (modelId: string) => void;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Detector"
-      className="flex items-center gap-1 rounded-lg border border-rule bg-paper-raised p-1"
-    >
-      {models.map((candidate) => {
-        const selected = candidate.id === activeId;
-        const usable = candidate.installed;
-        return (
-          <button
-            key={candidate.id}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            disabled={!usable}
-            onClick={() => onSelect(candidate.id)}
-            className={`focusable cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              selected
-                ? 'bg-ink text-paper'
-                : usable
-                  ? 'text-ink-soft hover:bg-paper hover:text-ink'
-                  : 'cursor-not-allowed text-ink-faint opacity-50'
-            }`}
-          >
-            {candidate.name}
-          </button>
-        );
-      })}
+      {analysis.result ? (
+        <ResultPanel
+          result={analysis.result}
+          text={analysis.analyzedText}
+          stale={analysis.analyzedText !== draft.text}
+          onReanalyse={() => analysis.run(draft.text)}
+          canReanalyse={!analysis.busy && words >= MIN_WORDS && words <= maxWords}
+          threshold={threshold}
+        />
+      ) : null}
     </div>
   );
 }
@@ -207,16 +96,8 @@ const VERDICT_LINE: Record<string, string> = {
 /** Passages shown before the list asks to be opened up. */
 const PASSAGE_LIMIT = 12;
 
-/** Ten buckets of ten percent, which is as fine as a sentence count gets. */
-const SPREAD_BINS = 10;
-
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
-}
-
-function countWords(text: string): number {
-  const trimmed = text.trim();
-  return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
 export function ResultPanel({
@@ -321,10 +202,6 @@ export function ResultPanel({
         </Panel>
       ) : null}
 
-      <div className="mt-4">
-        <ScoreSpread segments={result.segments} threshold={threshold} />
-      </div>
-
       <AnnotatedText
         text={text}
         segments={result.segments}
@@ -393,96 +270,8 @@ export function ResultPanel({
             </div>
           ) : null}
         </Panel>
-      ) : (
-        <Panel className="mt-4 p-5">
-          <p className="text-base text-ink-soft">
-            Nothing reached the {percent(threshold)} highlight threshold. The detector reads all{' '}
-            {result.segments.length} sentences as human; lower the threshold in Settings to see its
-            strongest passages anyway.
-          </p>
-        </Panel>
-      )}
-
-      <p className="mt-4 text-sm text-ink-soft">
-        Scored with {result.model.repo} ({result.model.license}). A score reflects how much the
-        text looks machine-written, not proof of who typed it.
-      </p>
+      ) : null}
     </section>
-  );
-}
-
-/**
- * The shape of the scores rather than their sum: one bar per ten percent of the
- * scale, tall enough to see a document that is uniformly one thing, and the
- * highlight threshold ruled across it.
- */
-function ScoreSpread({
-  segments,
-  threshold,
-}: {
-  segments: SegmentResult[];
-  threshold: number;
-}) {
-  const counts = useMemo(() => {
-    const bins = new Array<number>(SPREAD_BINS).fill(0);
-    for (const segment of segments) {
-      const bin = Math.min(SPREAD_BINS - 1, Math.max(0, Math.floor(segment.ai * SPREAD_BINS)));
-      bins[bin] += 1;
-    }
-    return bins;
-  }, [segments]);
-
-  const scores = useMemo(() => segments.map((segment) => segment.ai).sort((a, b) => a - b), [segments]);
-  const median = scores.length > 0 ? scores[Math.floor(scores.length / 2)] : 0;
-  const peak = Math.max(1, ...counts);
-  // A bin at or past the line belongs to the machine side of it.
-  const cut = threshold * SPREAD_BINS;
-
-  return (
-    <Panel className="p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="text-lg font-semibold text-ink">Where the sentences fall</h3>
-        <p className="text-sm text-ink-soft">
-          median {percent(median)}
-          {scores.length > 0 ? ` · highest ${percent(scores[scores.length - 1])}` : ''}
-        </p>
-      </div>
-
-      <div className="relative mt-4 flex h-24 items-end gap-1">
-        {counts.map((count, index) => (
-          <div key={index} className="flex h-full flex-1 flex-col justify-end">
-            <span className="shrink-0 text-center text-[0.625rem] leading-3 tabular-nums text-ink-faint">
-              {count > 0 ? count : ''}
-            </span>
-            <span
-              title={`${index * 10}–${index * 10 + 10}%: ${count} ${
-                count === 1 ? 'sentence' : 'sentences'
-              }`}
-              className={`w-full rounded-t-sm ${index >= cut ? 'bg-machine' : 'bg-human'}`}
-              // Stop short of the full height so the tallest bar still has its
-              // count above it, inside the panel.
-              style={{ height: `${(count / peak) * 86}%`, minHeight: count > 0 ? 3 : 0 }}
-            />
-          </div>
-        ))}
-        <span
-          aria-hidden
-          className="absolute -top-1.5 bottom-0 border-l border-dashed border-warn"
-          style={{ left: `${threshold * 100}%` }}
-        />
-      </div>
-
-      <div className="mt-2 flex justify-between text-xs text-ink-faint">
-        <span>0% machine</span>
-        <span>100%</span>
-      </div>
-
-      <p className="mt-3 text-sm text-ink-soft">
-        Every bar is ten percent of the scale wide and counts the sentences that landed in it. The
-        dashed line is the {percent(threshold)} highlight threshold, and everything to the right of
-        it is underlined in the text below.
-      </p>
-    </Panel>
   );
 }
 
