@@ -11,6 +11,4 @@ export interface Detector {
   ready(): Promise<void>;
   /** Yields one update per window, in window order. */
   score(windows: string[], signal: AbortSignal, batchSize: number): AsyncGenerator<ScoreUpdate>;
-  /** Frees memory held by the weights. */
-  dispose(): Promise<void>;
 }

@@ -85,11 +85,6 @@ export class OnnxClassifierDetector implements Detector {
       }
     }
   }
-
-  async dispose(): Promise<void> {
-    this.pipeline = null;
-    this.loading = null;
-  }
 }
 
 

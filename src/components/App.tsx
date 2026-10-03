@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { Settings } from '@/lib/catalog';
-import { fetchState, removeModel, saveSettings, unloadModel } from '@/lib/client';
+import { fetchState, removeModel, saveSettings } from '@/lib/client';
 import type { AppState, ModelInfo } from '@/lib/types';
 import { DetectorPicker } from './DetectorPicker';
 import { SettingsPanel } from './SettingsPanel';
@@ -19,7 +19,6 @@ export function App({ initialState }: { initialState: AppState }) {
   const [view, setView] = useState<View>('analyze');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [unloading, setUnloading] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -69,7 +68,6 @@ export function App({ initialState }: { initialState: AppState }) {
     [models, state.settings.activeModelId],
   );
   const anyInstalled = models.some((model) => model.installed);
-  const activeResident = state.loadedModelIds.includes(state.settings.activeModelId ?? '');
   const showDetectors = view === 'detectors' || !anyInstalled;
 
   const handleStart = useCallback(
@@ -100,19 +98,6 @@ export function App({ initialState }: { initialState: AppState }) {
     [refresh],
   );
 
-  const handleUnload = useCallback(async () => {
-    if (!activeModel) return;
-    setUnloading(true);
-    try {
-      await unloadModel(activeModel.id);
-      await refresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setUnloading(false);
-    }
-  }, [activeModel, refresh]);
-
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 pb-16">
       <header className="sticky top-0 z-30 -mx-5 border-b border-rule bg-paper/95 px-5 py-4 backdrop-blur">
@@ -134,29 +119,9 @@ export function App({ initialState }: { initialState: AppState }) {
             </span>
           </h1>
           <span className="text-base text-ink-soft">
-            {activeModel
-              ? `${activeModel.name} detector · ${
-                  activeResident
-                    ? `${formatRam(activeModel.ramMb)} of weights in memory`
-                    : 'weights on disk, none in memory'
-                }`
-              : 'no detector yet'}
+            {activeModel ? `${activeModel.name} detector` : 'no detector yet'}
           </span>
           <span className="flex-1" />
-          {activeModel ? (
-            <Button
-              variant="quiet"
-              onClick={() => void handleUnload()}
-              disabled={!activeResident || unloading}
-              title={
-                activeResident
-                  ? `Free the ${formatRam(activeModel.ramMb)} this detector holds. The next analysis loads it again.`
-                  : 'This detector holds nothing in memory right now.'
-              }
-            >
-              {unloading ? 'Unloading…' : 'Unload from memory'}
-            </Button>
-          ) : null}
           {anyInstalled ? (
             <Button variant="quiet" onClick={() => setView(showDetectors ? 'analyze' : 'detectors')}>
               {showDetectors ? 'Back to analysis' : 'Detectors'}
@@ -224,8 +189,4 @@ export function App({ initialState }: { initialState: AppState }) {
       ) : null}
     </div>
   );
-}
-
-function formatRam(megabytes: number): string {
-  return megabytes >= 1000 ? `${(megabytes / 1000).toFixed(1)} GB` : `${megabytes} MB`;
 }

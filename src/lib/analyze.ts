@@ -191,21 +191,3 @@ function countWords(text: string): number {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
-export async function releaseDetectors(): Promise<void> {
-  await Promise.all([...cache.values()].map((detector) => detector.dispose()));
-  cache.clear();
-}
-
-/** Drops one detector's weights. Returns false when it was not loaded at all. */
-export async function releaseDetector(modelId: string): Promise<boolean> {
-  const detector = cache.get(modelId);
-  if (!detector) return false;
-  await detector.dispose();
-  cache.delete(modelId);
-  return true;
-}
-
-/** Ids of the models whose weights are currently held in memory. */
-export function residentModelIds(): string[] {
-  return [...cache.keys()];
-}

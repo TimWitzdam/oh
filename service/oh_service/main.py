@@ -14,7 +14,6 @@ score is a sigmoid over the single pooled logit.
 from __future__ import annotations
 
 import asyncio
-import gc
 import json
 import math
 import os
@@ -200,26 +199,6 @@ async def load(request: Request) -> JSONResponse:
         "model": model_id,
         "loadMs": loaded.load_ms,
         "cached": True,
-    }
-
-
-@app.post("/unload")
-async def unload(request: Request) -> JSONResponse:
-    body = await request.json()
-    model_id = str(body.get("model", ""))
-    # Scoring streams run under the lock for their whole duration; dropping the
-    # weights midway would fault the batch that is still reading them.
-    if _score_lock.locked():
-        return JSONResponse({"error": "a scoring run is in progress"}, status_code=409)
-    async with _load_lock:
-        released = _loaded.pop(model_id, None)
-        if released is None:
-            return JSONResponse({"error": f"model {model_id} is not loaded"}, status_code=404)
-        del released
-        gc.collect()
-    return {
-        "model": model_id,
-        "loaded": sorted(_loaded),
     }
 
 

@@ -1,4 +1,3 @@
-import { residentModelIds } from './analyze';
 import { MODELS, formatBytes } from './catalog';
 import { downloads } from './downloads';
 import { inspectInstall, inspectPartial } from './models';
@@ -14,7 +13,6 @@ export async function loadState(): Promise<AppState> {
   return {
     settings,
     downloads: downloads.list().filter((job) => job.status !== 'done'),
-    loadedModelIds: residentModelIds(),
     models: MODELS.map((spec, index): ModelInfo => {
       const info = installed[index];
       return {

@@ -106,24 +106,6 @@ export class TorchDetector implements Detector {
       );
     }
   }
-
-  async dispose(): Promise<void> {
-    // The deep weights live in the inference service, so they have to be handed
-    // back over there; only then is this side free to forget the warm handle.
-    try {
-      const response = await fetch(`${INFERENCE_URL}/unload`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ model: this.spec.id }),
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!response.ok) {
-        throw new Error(`the inference service kept the weights: ${await describe(response)}`);
-      }
-    } finally {
-      this.loading = null;
-    }
-  }
 }
 
 async function describe(response: Response): Promise<string> {
