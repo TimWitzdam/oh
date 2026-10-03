@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId } from 'react';
 
 import type { ModelInfo } from '@/lib/types';
 import type { Settings } from '@/lib/catalog';
@@ -12,7 +12,6 @@ export function SettingsPanel({
   activeModel,
   onPatch,
   onSelectModel,
-  onRemoveModel,
   onOpenDetectors,
   onClose,
 }: {
@@ -21,14 +20,10 @@ export function SettingsPanel({
   activeModel: ModelInfo | null;
   onPatch: (patch: Partial<Settings>) => void;
   onSelectModel: (modelId: string) => void;
-  onRemoveModel: (modelId: string) => void;
   onOpenDetectors: () => void;
   onClose: () => void;
 }) {
-  const [confirming, setConfirming] = useState<string | null>(null);
   const detectorNoteId = useId();
-  const weightsNoteId = useId();
-  const installed = models.filter((model) => model.installed);
   // Detector scores are not probabilities: each model needs its own cut, so the
   // default belongs to the model and an override is opt-in.
   const modelDefault = activeModel?.threshold ?? 0.5;
@@ -175,43 +170,6 @@ export function SettingsPanel({
           </Field>
         </section>
 
-        {installed.length > 0 ? (
-          <section>
-            <div className="flex items-center gap-1.5">
-              <h3 className="text-lg font-semibold text-ink">Stored weights</h3>
-              <Hint id={weightsNoteId}>
-                Removing a detector frees its files. You can download it again later.
-              </Hint>
-            </div>
-            <div className="mt-3 space-y-2">
-              {installed.map((model) => (
-                <div key={model.id} className="flex items-center justify-between gap-3">
-                  <span className="text-base text-ink">{model.name}</span>
-                  {confirming === model.id ? (
-                    <span className="flex items-center gap-2">
-                      <Button
-                        variant="danger"
-                        onClick={() => {
-                          onRemoveModel(model.id);
-                          setConfirming(null);
-                        }}
-                      >
-                        Confirm
-                      </Button>
-                      <Button variant="quiet" onClick={() => setConfirming(null)}>
-                        Keep
-                      </Button>
-                    </span>
-                  ) : (
-                    <Button variant="quiet" onClick={() => setConfirming(model.id)}>
-                      Remove
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
       </div>
     </div>
   );

@@ -185,7 +185,6 @@ export function App({ initialState }: { initialState: AppState }) {
           activeModel={activeModel}
           onPatch={(update) => void patch(update)}
           onSelectModel={(modelId) => void patch({ activeModelId: modelId })}
-          onRemoveModel={handleRemove}
           onOpenDetectors={() => {
             setSettingsOpen(false);
             setView('detectors');
