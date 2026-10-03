@@ -34,9 +34,14 @@ RUN python3 -m venv /srv/venv \
  && /srv/venv/bin/pip install --upgrade pip \
   && /srv/venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 \
   && /srv/venv/bin/pip install -r requirements.txt \
- # The torch wheel is built for every use case, so it carries C++ headers, a
- # test suite and torchrun. Only the runtime libraries are needed here.
- && rm -rf /srv/venv/lib/python*/site-packages/torch/{test,include,bin,_inductor} \
+ # The torch wheel is built for every use case, so it carries C++ headers and a
+ # test suite. Neither is reachable at runtime. torch/bin stays: it holds
+ # torch_shm_manager, which torch/__init__.py looks for while importing. The
+ # paths are spelled out one by one because /bin/sh is dash, which has no brace
+ # expansion, and the glob has to stay unquoted to expand.
+ && for dead in test include; do rm -rf /srv/venv/lib/python*/site-packages/torch/$dead; done \
+ # pip and setuptools only exist to build the venv, which is already done.
+ && for dead in pip setuptools wheel; do rm -rf /srv/venv/lib/python*/site-packages/$dead; done \
  && find /srv/venv -type d -name __pycache__ -prune -exec rm -rf {} +
 
 # ------------------------------------------------------------------- runtime ---
