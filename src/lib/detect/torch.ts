@@ -62,6 +62,7 @@ export class TorchDetector implements Detector {
     if (!reader) throw new Error('inference service returned no stream');
     const decoder = new TextDecoder();
     let buffer = '';
+    let scored = 0;
 
     for (;;) {
       const { done, value } = await reader.read();
@@ -74,9 +75,20 @@ export class TorchDetector implements Detector {
         const message = JSON.parse(line) as { index?: number; ai?: number; error?: string };
         if (message.error) throw new Error(message.error);
         if (typeof message.index === 'number' && typeof message.ai === 'number') {
+          scored += 1;
           yield { index: message.index, ai: message.ai };
         }
       }
+    }
+
+    // The stream can end early without an error line: the service stops when it
+    // decides the client is gone, or the connection is cut. Returning quietly
+    // would leave the uncovered sentences to be scored 0.5 downstream, which
+    // reads in the UI as a real "50% machine" verdict rather than a failure.
+    if (scored < windows.length) {
+      throw new Error(
+        `The inference service returned ${scored} of ${windows.length} scores, so the result would be incomplete.`,
+      );
     }
   }
 

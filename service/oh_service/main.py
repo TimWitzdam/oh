@@ -8,6 +8,7 @@ onnxruntime in the Next.js process. Both share one container and one volume.
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import math
 import os

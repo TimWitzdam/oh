@@ -52,15 +52,31 @@ export async function POST(request: Request) {
       const send = (payload: unknown) => {
         controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
       };
+      let finished = false;
       try {
         for await (const event of analyze(text, spec, settings, request.signal)) {
+          if (event.type === 'done' || event.type === 'error') finished = true;
           send(event);
         }
+        // A stream that ends without a terminal event used to look identical to
+        // a clean finish from the browser's side, so a half-finished run came
+        // back as "the analysis stream ended before a result came back" with
+        // nothing in the logs to explain it.
+        if (!finished && !request.signal.aborted) {
+          send({ type: 'error', message: 'The analysis stopped early and no result was produced.' });
+        }
       } catch (error) {
-        const aborted = error instanceof Error && error.name === 'AbortError';
-        if (!aborted) {
+        // Only a disconnect is silent. An AbortError while the client is still
+        // connected came from somewhere else (a timeout on the hop to the
+        // inference service, say) and is the actual reason the run failed.
+        const clientGone = request.signal.aborted;
+        if (!clientGone) {
+          console.error('[analyze] failed', error);
           try {
-            send({ type: 'error', message: error instanceof Error ? error.message : String(error) });
+            send({
+              type: 'error',
+              message: error instanceof Error ? error.message : String(error),
+            });
           } catch {
             // client already gone
           }

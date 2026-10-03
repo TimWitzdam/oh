@@ -34,7 +34,7 @@ export function useAnalysis() {
     setAnalyzedText(text);
     setProgress({ done: 0, total: 0 });
 
-    let sawResult = false;
+    let sawTerminal = false;
     const onEvent = (event: AnalysisEvent) => {
       switch (event.type) {
         case 'start':
@@ -48,11 +48,15 @@ export function useAnalysis() {
           setScores((previous) => [...previous, { index: event.index, ai: event.ai }]);
           break;
         case 'done':
-          sawResult = true;
+          sawTerminal = true;
           setResult(event.result);
           setPhase('done');
           break;
         case 'error':
+          // Counts as an answer: the stream ending after this is the normal
+          // shape of a failed run, and the fallback below used to overwrite
+          // this message with a generic one on the way out.
+          sawTerminal = true;
           setError(event.message);
           setPhase('error');
           break;
@@ -61,7 +65,7 @@ export function useAnalysis() {
 
     try {
       await streamAnalysis(text, onEvent, controller.signal);
-      if (!sawResult) {
+      if (!sawTerminal) {
         setError('The analysis stream ended before a result came back.');
         setPhase('error');
       }
