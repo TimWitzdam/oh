@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import type { DownloadJob } from '@/lib/downloads';
 import type { ModelInfo } from '@/lib/types';
 import { CheckIcon, DownloadIcon } from './icons';
@@ -104,9 +106,32 @@ export function DownloadPanel({
   onActivate: () => void;
   busy: boolean;
 }) {
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const running = isRunning(job);
   const progress = job ? Math.min(1, job.bytesTotal > 0 ? job.bytesReceived / job.bytesTotal : 0) : 0;
   const status = job ? describe(job) : null;
+
+  const removeButton = (label: string) =>
+    confirmingRemove ? (
+      <span className="flex items-center gap-2">
+        <Button
+          variant="danger"
+          onClick={() => {
+            setConfirmingRemove(false);
+            onRemove();
+          }}
+        >
+          Confirm
+        </Button>
+        <Button variant="quiet" onClick={() => setConfirmingRemove(false)}>
+          Keep
+        </Button>
+      </span>
+    ) : (
+      <Button variant="quiet" onClick={() => setConfirmingRemove(true)} disabled={busy}>
+        {label}
+      </Button>
+    );
 
   if (model.installed) {
     return (
@@ -122,9 +147,7 @@ export function DownloadPanel({
             Use {model.name}
           </Button>
         )}
-        <Button variant="quiet" onClick={onRemove} disabled={busy}>
-          Remove files
-        </Button>
+        {removeButton('Remove files')}
       </div>
     );
   }
@@ -156,11 +179,7 @@ export function DownloadPanel({
                 : 'Download'}
           </Button>
         )}
-        {!running && job && job.status !== 'done' ? (
-          <Button variant="quiet" onClick={onRemove} disabled={busy}>
-            Clear partial files
-          </Button>
-        ) : null}
+        {!running && job && job.status !== 'done' ? removeButton('Clear partial files') : null}
       </div>
     </div>
   );
