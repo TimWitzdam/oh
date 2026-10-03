@@ -10,7 +10,14 @@ COPY . .
 # public/ is empty and therefore absent from a fresh git checkout, so make sure
 # the runtime stage always has something to copy.
 RUN mkdir -p public \
- && npm run build
+ && npm run build \
+ # next traces these two whole (see outputFileTracingIncludes in next.config.ts),
+ # which drags in the win32 and darwin onnxruntime binaries and the wasm build of
+ # sharp. None of them can be loaded on linux-x64, so drop them before the
+ # standalone tree is copied into the runtime stage.
+ && find .next/standalone -type d \( -path '*/onnxruntime-node/bin/napi-v6/win32' \
+      -o -path '*/onnxruntime-node/bin/napi-v6/darwin' -o -name 'sharp-wasm32' \) \
+      -prune -exec rm -rf {} +
 
 # ------------------------------------------------------------------- python ---
 # Built on the same Debian base as the runtime stage so the virtualenv links
@@ -25,8 +32,12 @@ RUN apt-get update \
 COPY service/requirements.txt ./requirements.txt
 RUN python3 -m venv /srv/venv \
  && /srv/venv/bin/pip install --upgrade pip \
- && /srv/venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 \
- && /srv/venv/bin/pip install -r requirements.txt
+  && /srv/venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 \
+  && /srv/venv/bin/pip install -r requirements.txt \
+ # The torch wheel is built for every use case, so it carries C++ headers, a
+ # test suite and torchrun. Only the runtime libraries are needed here.
+ && rm -rf /srv/venv/lib/python*/site-packages/torch/{test,include,bin,_inductor} \
+ && find /srv/venv -type d -name __pycache__ -prune -exec rm -rf {} +
 
 # ------------------------------------------------------------------- runtime ---
 FROM node:22-bookworm-slim AS runtime
@@ -48,21 +59,24 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv libgomp1 ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=python-deps /srv/venv /srv/venv
-COPY service/oh_service /srv/oh_service
+# Created before the copies below so they can hand over ownership as they go.
+# A chown afterwards would restate every copied byte in a fresh layer.
+RUN useradd --system --create-home --uid 10001 oh
+
+COPY --from=python-deps --chown=oh:oh /srv/venv /srv/venv
+COPY --chown=oh:oh service/oh_service /srv/oh_service
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # The standalone output already carries the traced copy of everything the server
 # requires (next, react, @huggingface/transformers, onnxruntime-node), so no
 # separate node_modules copy is needed here.
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=oh:oh /app/.next/standalone ./
+COPY --from=builder --chown=oh:oh /app/.next/static ./.next/static
+COPY --from=builder --chown=oh:oh /app/public ./public
 
 RUN mkdir -p /data/models \
- && useradd --system --create-home --uid 10001 oh \
- && chown -R oh:oh /data /app
+ && chown -R oh:oh /data
 USER oh
 VOLUME ["/data"]
 EXPOSE 3000
