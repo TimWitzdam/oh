@@ -2,7 +2,7 @@ export interface Sentence {
   start: number;
   end: number;
   text: string;
-  /** A line break precedes this sentence, so a paragraph most likely starts here. */
+  /** A window should start here rather than continue through this sentence. */
   breakBefore: boolean;
 }
 
@@ -17,25 +17,78 @@ export interface Window {
 
 const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' });
 
+type LineKind = 'blank' | 'heading' | 'list' | 'quote' | 'text';
+
+function classifyLine(line: string): LineKind {
+  const trimmed = line.trim();
+  if (!trimmed) return 'blank';
+  if (/^#{1,6}\s/.test(trimmed)) return 'heading';
+  if (/^(?:[-*+]|\d{1,3}[.)])\s/.test(trimmed)) return 'list';
+  if (/^>\s?/.test(trimmed)) return 'quote';
+  return 'text';
+}
+
+/**
+ * `Intl.Segmenter` treats "1." as a sentence of its own, which would leave the
+ * number floating away from its item in the highlighted view. Markers are swapped
+ * for same-length replacements that cannot end a sentence; the offsets still
+ * address the original text, so nothing here reaches the UI.
+ */
+function maskListMarkers(text: string): string {
+  return text
+    .replace(/^([ \t]*)([-*+])([ \t])/gm, '$1•$3')
+    .replace(/^([ \t]*)(\d{1,3})[.)]([ \t])/gm, (_match, indent, digits, gap) => `${indent}${digits}a${gap}`);
+}
+
+/**
+ * Decides whether a window should break at the gap before this sentence.
+ *
+ * Blank lines always break, and so do headings and the end of a list. A single
+ * newline between ordinary lines breaks too, because pasted text often separates
+ * paragraphs that way. Consecutive list items do *not* break: a markdown bullet
+ * list is one unit of text, and scoring each bullet alone gives the detector
+ * three words to work with.
+ */
+function breaksHere(text: string, previousEnd: number, start: number): boolean {
+  const gap = text.slice(previousEnd, start);
+  if (!gap.includes('\n')) return false;
+
+  const lineBefore = text.slice(text.lastIndexOf('\n', previousEnd - 1) + 1, previousEnd);
+  const before = classifyLine(lineBefore);
+
+  // A heading is context for what follows it, so it never sits in a window of
+  // its own - not even across the blank line a markdown heading is followed by.
+  if (before === 'heading') return false;
+
+  if (/\n[^\S\n]*\n/.test(gap)) return true;
+
+  const newlineAt = previousEnd + gap.indexOf('\n');
+  // The whole line, not just the slice up to the sentence: classifying "- "
+  // as prose would break a bullet list into one window per bullet.
+  const lineEnd = text.indexOf('\n', newlineAt + 1);
+  const lineAfter = text.slice(newlineAt + 1, lineEnd === -1 ? text.length : lineEnd);
+  const after = classifyLine(lineAfter);
+
+  if (after === 'heading') return true;
+  if (before === 'list' && after === 'list') return false;
+  return true;
+}
+
 export function splitSentences(text: string): Sentence[] {
   const out: Sentence[] = [];
   let previousEnd = -1;
 
-  for (const part of segmenter.segment(text)) {
+  for (const part of segmenter.segment(maskListMarkers(text))) {
     const raw = part.segment;
     const trimmed = raw.trim();
     if (!trimmed) continue;
     const start = part.index + (raw.length - raw.trimStart().length);
     const end = start + trimmed.length;
-    const gap = previousEnd >= 0 ? text.slice(previousEnd, start) : '';
     out.push({
       start,
       end,
-      text: trimmed,
-      // A line break between two sentences means a paragraph boundary in
-      // practice: hard-wrapped prose breaks lines *inside* a sentence, and the
-      // sentence splitter has already joined those.
-      breakBefore: previousEnd >= 0 && /\n/.test(gap),
+      text: text.slice(start, end),
+      breakBefore: previousEnd >= 0 && breaksHere(text, previousEnd, start),
     });
     previousEnd = end;
   }
@@ -45,10 +98,10 @@ export function splitSentences(text: string): Sentence[] {
 /**
  * Groups sentences into scoring windows.
  *
- * Two rules matter for accuracy: a window never spans a paragraph break, because
- * detectors score a paragraph as a unit, and consecutive windows overlap by one
- * sentence so a sentence sitting on a boundary gets scored in context twice
- * instead of once.
+ * Three rules matter for accuracy: a window never crosses a paragraph break,
+ * because detectors score a paragraph as a unit; consecutive windows overlap by
+ * one sentence so boundary sentences get two opinions instead of one; and long
+ * sentences are split on word boundaries rather than truncated.
  */
 export function buildWindows(
   sentences: Sentence[],

@@ -17,10 +17,10 @@ const SPEED: Record<ModelInfo['tier'], string> = {
   deep: 'Slow',
 };
 
-/** Relative bar length for the speed row, so the three tiers stay comparable. */
+/** Bar length relative to the slowest tier, from measured cost per passage. */
 const SPEED_FRACTION: Record<ModelInfo['tier'], number> = {
-  lite: 0.08,
-  balanced: 0.2,
+  lite: 0.06,
+  balanced: 0.8,
   deep: 1,
 };
 

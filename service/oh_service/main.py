@@ -8,8 +8,8 @@ onnxruntime in the Next.js process. Both share one container and one volume.
 from __future__ import annotations
 
 import asyncio
-import gc
 import json
+import math
 import os
 import time
 from dataclasses import dataclass, field
@@ -70,12 +70,21 @@ class LoadedModel:
 
         with torch.inference_mode():
             logits = self.model(**inputs).logits[0].float()
+
+        index = min(int(manifest.get("aiIndex", 1)), logits.shape[-1] - 1)
+
+        if manifest.get("scoreMode") == "logodds":
+            # Unbounded margin between the two class logits, squashed for display.
+            # Softmax saturates on these models and hides the ranking.
+            margin = float(logits[index] - logits[1 - index])
+            temperature = float(manifest.get("temperature") or 4.0)
+            return 1.0 / (1.0 + math.exp(-margin / temperature))
+
         temperature = manifest.get("temperature")
         if temperature:
             logits = logits / float(temperature)
         probs = torch.softmax(logits, dim=-1)
-        index = int(manifest.get("aiIndex", 1))
-        return float(probs[min(index, probs.shape[-1] - 1)])
+        return float(probs[index])
 
 
 _loaded: dict[str, LoadedModel] = {}

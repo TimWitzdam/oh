@@ -3,6 +3,7 @@ import type { AnalysisEvent, AnalysisResult, SegmentResult } from './types';
 import { createDetector } from './detect';
 import { throwIfAborted } from './detect/onnx';
 import type { Detector } from './detect/types';
+import { stripFormatting } from './normalize';
 import { buildWindows, splitSentences } from './segment';
 
 let inflight = 0;
@@ -64,11 +65,11 @@ export async function* analyze(
     yield { type: 'progress', done: 0, total: windows.length, phase: 'scoring' };
 
     const scores = new Map<number, number>();
-    for await (const update of detector.score(
-      windows.map((window) => window.text),
-      signal,
-      settings.batchSize,
-    )) {
+    // Models see prose: markdown markers are stripped from the text handed to
+    // them, while the document keeps its original characters for highlighting.
+    const scoringText = windows.map((window) => stripFormatting(window.text));
+
+    for await (const update of detector.score(scoringText, signal, settings.batchSize)) {
       throwIfAborted(signal);
       scores.set(update.index, update.ai);
       const window = windows[update.index];

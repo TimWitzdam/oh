@@ -11,6 +11,7 @@ export interface ModelManifest {
   dtype?: string;
   aiIndex: number;
   temperature?: number;
+  scoreMode?: 'logodds';
   quantize?: boolean;
   readout?: 'variable-eos';
   windowChars: number;
@@ -38,6 +39,7 @@ export function buildManifest(spec: ModelSpec): ModelManifest {
     dtype: spec.dtype,
     aiIndex: spec.aiIndex,
     temperature: spec.temperature,
+    scoreMode: spec.scoreMode,
     quantize: spec.quantize,
     readout: spec.readout,
     windowChars: spec.windowChars,

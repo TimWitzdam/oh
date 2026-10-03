@@ -35,7 +35,7 @@ export class TorchDetector implements Detector {
       });
     } catch {
       throw new Error(
-        'The Deep tier needs the Python inference service inside the container, and it is not responding. The Lite and Balanced tiers do not need it.',
+        'The Balanced and Deep tiers need the Python inference service inside the container, and it is not responding. The Lite tier does not need it.',
       );
     }
     if (!response.ok) {

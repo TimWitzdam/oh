@@ -26,8 +26,10 @@ export interface ModelSpec {
   dtype?: string;
   /** Logit index that means "machine written". */
   aiIndex: number;
-  /** Torch tiers: quantise weights to int8 at load time (off for the deep tier). */
+  /** Torch tiers: quantise weights to int8 at load time. */
   quantize?: boolean;
+  /** 'logodds' scores the margin between the two logits instead of softmaxing. */
+  scoreMode?: 'logodds';
   /** Torch tiers: where the classification head reads from. */
   readout?: 'variable-eos';
   /** Optional calibration: divide logits by this before softmax. */
@@ -47,32 +49,9 @@ const MB = 1024 * 1024;
 
 export const MODELS: ModelSpec[] = [
   {
-    id: 'e5small-int8',
+    id: 'chatgpt-detector-roberta-int8',
     tier: 'lite',
     name: 'Lite',
-    repo: 'onnx-community/e5-small-lora-ai-generated-detector-ONNX',
-    license: 'apache-2.0',
-    kind: 'onnx-classifier',
-    dtype: 'int8',
-    aiIndex: 1,
-    windowChars: 420,
-    maxTokens: 384,
-    files: [
-      { path: 'config.json', bytes: 709 },
-      { path: 'onnx/model_int8.onnx', bytes: 34157539 },
-      { path: 'special_tokens_map.json', bytes: 695 },
-      { path: 'tokenizer.json', bytes: 711396 },
-      { path: 'tokenizer_config.json', bytes: 1301 },
-      { path: 'vocab.txt', bytes: 231508 },
-    ],
-    bytes: 35103148,
-    ramMb: 220,
-    detail: '33M parameter BERT encoder, int8 quantised, loads in about a second.',
-  },
-  {
-    id: 'chatgpt-detector-roberta-int8',
-    tier: 'balanced',
-    name: 'Balanced',
     repo: 'onnx-community/chatgpt-detector-roberta-ONNX',
     license: 'apache-2.0',
     kind: 'onnx-classifier',
@@ -95,8 +74,8 @@ export const MODELS: ModelSpec[] = [
   },
   {
     id: 'qwen3-06b-detector',
-    tier: 'deep',
-    name: 'Deep',
+    tier: 'balanced',
+    name: 'Balanced',
     repo: 'rasbt/ai-text-detector-qwen3-0.6b-variable',
     license: 'apache-2.0',
     kind: 'torch-classifier',
@@ -115,7 +94,34 @@ export const MODELS: ModelSpec[] = [
     ],
     bytes: 1203565300,
     ramMb: 2_700,
-    detail: 'Qwen3-0.6B detector: a fine-tuned language model reading out at the last token, with temperature scaling.',
+    detail: 'Qwen3-0.6B detector: a fine-tuned language model reading out at the last token.',
+  },
+  {
+    id: 'textsight-v23',
+    tier: 'deep',
+    name: 'Deep',
+    repo: 'textsightai/textsight-detector-v23-custom',
+    license: 'unstated by the author',
+    kind: 'torch-classifier',
+    aiIndex: 1,
+    // The card asks for the logit margin: its softmax saturates and collapses
+    // 77% of a 2,520-document benchmark into exact ties. The divisor below only
+    // turns that unbounded margin into something displayable.
+    scoreMode: 'logodds',
+    temperature: 4,
+    quantize: false,
+    windowChars: 900,
+    maxTokens: 512,
+    files: [
+      { path: 'config.json', bytes: 1031 },
+      { path: 'model.safetensors', bytes: 1740304440 },
+      { path: 'special_tokens_map.json', bytes: 1022 },
+      { path: 'tokenizer.json', bytes: 8332381 },
+      { path: 'tokenizer_config.json', bytes: 1686 },
+    ],
+    bytes: 1748640560,
+    ramMb: 2_200,
+    detail: 'DeBERTa-v3-large detector benchmarked on 2,520 real documents, scored by logit margin.',
   },
 ];
 
