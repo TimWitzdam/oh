@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 
 import { DEFAULT_SETTINGS, Settings, findModel } from './catalog';
@@ -13,13 +14,42 @@ export async function readSettings(): Promise<Settings> {
   return sanitize(stored);
 }
 
-export async function writeSettings(patch: Partial<Settings>): Promise<Settings> {
-  const next = sanitize({ ...(await readSettings()), ...patch });
+/**
+ * Writes are queued rather than run side by side.
+ *
+ * A slider sends one of these per step of its drag, so several land at once.
+ * Two problems came out of that: the read-modify-write interleaved and lost
+ * whichever patch was based on the older read, and both writes shared one
+ * temporary file - named after the process, which is the same for all of them -
+ * so the first rename took the file the second was still writing and the second
+ * came back as a 500.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+
+export function writeSettings(patch: Partial<Settings>): Promise<Settings> {
+  const written = queue.then(
+    () => write(patch),
+    () => write(patch),
+  );
+  // The queue has to survive a failed write, or one error would reject every
+  // patch behind it as well.
+  queue = written.catch(() => undefined);
+  return written;
+}
+
+async function write(patch: Partial<Settings>): Promise<Settings> {
+  const settings = sanitize({ ...(await readSettings()), ...patch });
   await fs.mkdir(DATA_DIR, { recursive: true });
-  const tmp = `${SETTINGS_FILE}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
-  await fs.rename(tmp, SETTINGS_FILE);
-  return next;
+  const tmp = `${SETTINGS_FILE}.${randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(tmp, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+    await fs.rename(tmp, SETTINGS_FILE);
+  } catch (error) {
+    // Leave nothing of a half-finished write behind in the data volume.
+    await fs.rm(tmp, { force: true });
+    throw error;
+  }
+  return settings;
 }
 
 /**

@@ -15,8 +15,11 @@ export async function saveSettings(patch: Partial<AppState['settings']>): Promis
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(patch),
   });
-  if (!response.ok) throw new Error(`settings update failed: ${response.status}`);
-  const data = (await response.json()) as { settings: AppState['settings'] };
+  const data = (await response.json().catch(() => ({}))) as {
+    settings?: AppState['settings'];
+    error?: string;
+  };
+  if (!response.ok || !data.settings) throw new Error(data.error ?? `settings update failed: ${response.status}`);
   return data.settings;
 }
 

@@ -31,8 +31,15 @@ export function App({ initialState }: { initialState: AppState }) {
   }, []);
 
   const patch = useCallback(async (update: Partial<Settings>) => {
-    const settings = await saveSettings(update);
-    setState((previous) => ({ ...previous, settings }));
+    try {
+      const settings = await saveSettings(update);
+      setState((previous) => ({ ...previous, settings }));
+      setError(null);
+    } catch (caught) {
+      // A slider sends a patch per step, so this is the one write that can fail
+      // out of the ordinary. Say so instead of letting the rejection go quiet.
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
   }, []);
 
   // Writes and reads are kept strictly in sequence: two refreshes in flight at

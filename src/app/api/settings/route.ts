@@ -12,6 +12,19 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 });
   }
-  const settings = await writeSettings(patch);
-  return NextResponse.json({ settings });
+  try {
+    return NextResponse.json({ settings: await writeSettings(patch) });
+  } catch (error) {
+    // The panel keeps working off the last good settings, so the reader only
+    // needs to know the change did not stick and why.
+    console.error('[settings] write failed', error);
+    return NextResponse.json(
+      { error: `The settings could not be written: ${message(error)}` },
+      { status: 500 },
+    );
+  }
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
