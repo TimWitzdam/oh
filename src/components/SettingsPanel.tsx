@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import type { ModelInfo } from '@/lib/types';
 import type { Settings } from '@/lib/catalog';
-import { Button, Field, NumberInput, Panel, Slider } from './primitives';
+import { Button, Field, Hint, NumberInput, Panel, Slider } from './primitives';
 
 export function SettingsPanel({
   settings,
@@ -26,6 +26,8 @@ export function SettingsPanel({
   onClose: () => void;
 }) {
   const [confirming, setConfirming] = useState<string | null>(null);
+  const detectorNoteId = useId();
+  const weightsNoteId = useId();
   const installed = models.filter((model) => model.installed);
   // Detector scores are not probabilities: each model needs its own cut, so the
   // default belongs to the model and an override is opt-in.
@@ -50,10 +52,12 @@ export function SettingsPanel({
         </div>
 
         <section>
-          <h3 className="text-lg font-semibold text-ink">Detector</h3>
-          <p className="mt-1 text-sm text-ink-soft">
-            Weights are cached on the server, so switching tiers is instant once downloaded.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-lg font-semibold text-ink">Detector</h3>
+            <Hint id={detectorNoteId}>
+              Weights are cached on the server, so switching tiers is instant once downloaded.
+            </Hint>
+          </div>
           <div className="mt-3 space-y-2">
             {models.map((model) => {
               const selected = activeModel?.id === model.id;
@@ -176,10 +180,12 @@ export function SettingsPanel({
 
         {installed.length > 0 ? (
           <section>
-            <h3 className="text-lg font-semibold text-ink">Stored weights</h3>
-            <p className="mt-1 text-sm text-ink-soft">
-              Removing a detector frees its files. You can download it again later.
-            </p>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-lg font-semibold text-ink">Stored weights</h3>
+              <Hint id={weightsNoteId}>
+                Removing a detector frees its files. You can download it again later.
+              </Hint>
+            </div>
             <div className="mt-3 space-y-2">
               {installed.map((model) => (
                 <div key={model.id} className="flex items-center justify-between gap-3">

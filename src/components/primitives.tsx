@@ -1,6 +1,9 @@
 'use client';
 
+import { createContext, useContext, useId } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+
+import { InfoIcon } from './icons';
 
 type Variant = 'primary' | 'plain' | 'quiet' | 'danger';
 
@@ -83,6 +86,42 @@ export function Meter({ value }: { value: number }) {
   );
 }
 
+/**
+ * An explanation that waits to be asked for. The trigger is a real button, so
+ * the note opens on hover, on tap and on keyboard focus rather than only on a
+ * pointer; the bubble is a tooltip, so a control names it with
+ * aria-describedby and screen readers get the words without the popup.
+ */
+export function Hint({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <span className="group relative ml-1 inline-flex align-middle">
+      <button
+        type="button"
+        aria-describedby={id}
+        className="focusable cursor-help rounded-full text-ink-faint transition-colors hover:text-ink"
+      >
+        <InfoIcon />
+        <span className="sr-only">What this means</span>
+      </button>
+      <span
+        id={id}
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 w-60 rounded-md border border-rule bg-paper-raised px-3 py-2 text-sm font-normal leading-snug text-ink-soft opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * Ids the field hands down, so the control can take its name from the label
+ * alone. A wrapping label would drag the whole explanation into the name.
+ */
+const FieldControl = createContext<{ labelId: string; hintId?: string; inputId: string } | null>(
+  null,
+);
+
 export function Field({
   label,
   hint,
@@ -92,12 +131,24 @@ export function Field({
   hint?: ReactNode;
   children: ReactNode;
 }) {
+  const base = useId();
+  const labelId = `${base}-label`;
+  const hintId = `${base}-hint`;
+  const inputId = `${base}-input`;
   return (
-    <label className="block">
-      <span className="block text-sm font-medium text-ink">{label}</span>
-      {hint ? <span className="mt-0.5 block text-sm text-ink-soft">{hint}</span> : null}
-      <div className="mt-2">{children}</div>
-    </label>
+    <div>
+      {/* The label sits on the caption rather than wrapping the row, so clicking
+          it focuses the input without also firing the buttons underneath. */}
+      <div className="flex items-center gap-1.5">
+        <label htmlFor={inputId} id={labelId} className="cursor-pointer text-sm font-medium text-ink">
+          {label}
+        </label>
+        {hint ? <Hint id={hintId}>{hint}</Hint> : null}
+      </div>
+      <FieldControl.Provider value={{ labelId, hintId: hint ? hintId : undefined, inputId }}>
+        <div className="mt-2">{children}</div>
+      </FieldControl.Provider>
+    </div>
   );
 }
 
@@ -118,10 +169,14 @@ export function NumberInput({
   suffix?: string;
   disabled?: boolean;
 }) {
+  const field = useContext(FieldControl);
   return (
     <span className="inline-flex items-center gap-2">
       <input
         type="number"
+        id={field?.inputId}
+        aria-labelledby={field?.labelId}
+        aria-describedby={field?.hintId}
         className="focusable w-28 rounded-md border border-rule-strong bg-paper-raised px-3 py-2 font-mono text-sm text-ink"
         value={value}
         min={min}
@@ -155,10 +210,14 @@ export function Slider({
   format: (value: number) => string;
   disabled?: boolean;
 }) {
+  const field = useContext(FieldControl);
   return (
     <span className="flex items-center gap-3">
       <input
         type="range"
+        id={field?.inputId}
+        aria-labelledby={field?.labelId}
+        aria-describedby={field?.hintId}
         className="focusable h-2 w-full max-w-xs cursor-pointer appearance-none rounded-full border border-rule bg-paper accent-(--color-ink)"
         value={value}
         min={min}
