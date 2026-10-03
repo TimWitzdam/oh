@@ -198,7 +198,7 @@ export function App({ initialState }: { initialState: AppState }) {
           <Workspace
             model={activeModel}
             models={models}
-            threshold={state.settings.threshold}
+            threshold={state.settings.threshold ?? activeModel.threshold}
             maxWords={state.settings.maxWords}
             onSelectModel={(modelId) => void patch({ activeModelId: modelId })}
           />

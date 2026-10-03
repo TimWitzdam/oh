@@ -1,4 +1,4 @@
-import type { ModelSpec, Settings } from './catalog';
+import { effectiveThreshold, type ModelSpec, type Settings } from './catalog';
 import type { AnalysisEvent, AnalysisResult, SegmentResult } from './types';
 import { createDetector } from './detect';
 import { throwIfAborted } from './detect/onnx';
@@ -88,8 +88,9 @@ export async function* analyze(
       };
     }
 
-    const segments = aggregate(sentences, windows, scores, settings.smoothing);
-    const result = summarize(segments, text, model, windows.length, startedAt);
+    const threshold = effectiveThreshold(settings, spec);
+    const segments = aggregate(sentences, windows, scores, settings.smoothing, threshold);
+    const result = summarize(segments, text, model, windows.length, startedAt, threshold);
     yield { type: 'done', result };
   } finally {
     inflight -= 1;
@@ -101,6 +102,7 @@ function aggregate(
   windows: ReturnType<typeof buildWindows>,
   scores: Map<number, number>,
   smoothing: number,
+  threshold: number,
 ): SegmentResult[] {
   const weights = new Array<number>(sentences.length).fill(0);
   const totals = new Array<number>(sentences.length).fill(0);
@@ -130,7 +132,10 @@ function aggregate(
     }
   }
 
-  const raw = weights.map((weight, index) => (weight > 0 ? totals[index] / weight : 0.5));
+  // A sentence no window covered has no score at all. Parking it on the
+  // threshold reads as "exactly at the line", which the UI then lists as
+  // flagged on a technicality.
+  const raw = weights.map((weight, index) => (weight > 0 ? totals[index] / weight : threshold * 0.99));
 
   return sentences.map((sentence, index) => {
     const from = Math.max(0, index - smoothing);
@@ -152,6 +157,7 @@ function summarize(
   model: AnalysisResult['model'],
   windowCount: number,
   startedAt: number,
+  threshold: number,
 ): AnalysisResult {
   let aiChars = 0;
   let totalChars = 0;
@@ -161,7 +167,7 @@ function summarize(
     const length = segment.end - segment.start;
     totalChars += length;
     aiChars += segment.ai * length;
-    if (segment.ai >= 0.5) flagged += 1;
+    if (segment.ai >= threshold) flagged += 1;
   }
 
   const aiShare = totalChars > 0 ? aiChars / totalChars : 0;

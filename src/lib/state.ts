@@ -28,6 +28,7 @@ export async function loadState(): Promise<AppState> {
         bytes: spec.bytes,
         bytesLabel: formatBytes(spec.bytes),
         ramMb: spec.ramMb,
+        threshold: spec.threshold,
         detail: spec.detail,
         installed: info !== null,
         installedAt: info?.installedAt ?? null,

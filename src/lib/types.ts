@@ -14,6 +14,8 @@ export interface ModelInfo {
   bytes: number;
   bytesLabel: string;
   ramMb: number;
+  /** Default highlight threshold measured for this model. */
+  threshold: number;
   detail: string;
   installed: boolean;
   installedAt: string | null;

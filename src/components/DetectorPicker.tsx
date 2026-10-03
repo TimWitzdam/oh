@@ -6,9 +6,9 @@ import { DownloadPanel } from './DownloadPanel';
 import { CheckIcon } from './icons';
 
 const TIER_NOTE: Record<ModelInfo['tier'], string> = {
-  lite: 'Smallest and fastest',
-  balanced: 'Best accuracy per megabyte',
-  deep: 'Most careful, slowest',
+  lite: 'Smallest and fastest, weakest on unseen writing',
+  balanced: 'A different kind of checker, not a sharper one',
+  deep: 'Most accurate, slowest',
 };
 
 const SPEED: Record<ModelInfo['tier'], string> = {

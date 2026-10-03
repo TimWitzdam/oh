@@ -22,16 +22,32 @@ export async function writeSettings(patch: Partial<Settings>): Promise<Settings>
   return next;
 }
 
+/**
+ * Settings written before thresholds moved into the catalog stored the one
+ * shared default, 0.5. Keeping that value would pin every existing install to
+ * the number this change exists to replace, so it is read as "no override" and
+ * the active model's measured default takes over. Any other stored value was
+ * chosen by a person and is left alone.
+ */
+const LEGACY_THRESHOLD = 0.5;
+
 function sanitize(input: Partial<Settings>): Settings {
   const model = findModel(input.activeModelId ?? null);
   return {
     activeModelId: model ? model.id : null,
     windowChars: clamp(input.windowChars, 0, 1200, DEFAULT_SETTINGS.windowChars),
-    threshold: clamp(input.threshold, 0.1, 0.95, DEFAULT_SETTINGS.threshold),
+    // null keeps the active model's measured default.
+    threshold: sanitizeThreshold(input.threshold),
     smoothing: Math.round(clamp(input.smoothing, 0, 3, DEFAULT_SETTINGS.smoothing)),
     maxWords: Math.round(clamp(input.maxWords, 100, 60_000, DEFAULT_SETTINGS.maxWords)),
     batchSize: Math.round(clamp(input.batchSize, 1, 32, DEFAULT_SETTINGS.batchSize)),
   };
+}
+
+function sanitizeThreshold(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value === LEGACY_THRESHOLD) return null;
+  return clamp(value, 0.1, 0.995, 0.5);
 }
 
 function clamp(value: unknown, min: number, max: number, fallback: number): number {

@@ -28,12 +28,18 @@ export interface ModelSpec {
   aiIndex: number;
   /** Torch tiers: quantise weights to int8 at load time. */
   quantize?: boolean;
-  /** 'logodds' scores the margin between the two logits instead of softmaxing. */
-  scoreMode?: 'logodds';
   /** Torch tiers: where the classification head reads from. */
-  readout?: 'variable-eos';
+  readout?: 'variable-eos' | 'mean-pool-logit';
   /** Optional calibration: divide logits by this before softmax. */
   temperature?: number;
+  /**
+   * Default highlight threshold for this model, measured on labelled text the
+   * model was not trained on (see scripts/fetch-eval-set.py). Detector scores
+   * are not probabilities and sit in different places on every model, so one
+   * shared default either floods a document with underlines or hides everything.
+   * The user can override it; this is what an untouched install uses.
+   */
+  threshold: number;
   /** Characters of text handed to the model per scoring pass. */
   windowChars: number;
   /** Token ceiling per window; windows are trimmed to this. */
@@ -57,6 +63,9 @@ export const MODELS: ModelSpec[] = [
     kind: 'onnx-classifier',
     dtype: 'int8',
     aiIndex: 1,
+    // Its scores pile up against 1.0, so the old shared 0.5 flagged a fifth of
+    // unseen human documents. 0.99 holds the false-positive rate near 6%.
+    threshold: 0.99,
     windowChars: 560,
     maxTokens: 512,
     files: [
@@ -70,7 +79,8 @@ export const MODELS: ModelSpec[] = [
     ],
     bytes: 130672011,
     ramMb: 420,
-    detail: 'RoBERTa-large encoder trained across many generators, int8 quantised.',
+    detail:
+      'RoBERTa-large encoder from 2023, int8 quantised. Cheapest and quickest, and the least accurate on writing it has not seen.',
   },
   {
     id: 'qwen3-06b-detector',
@@ -83,6 +93,11 @@ export const MODELS: ModelSpec[] = [
     temperature: 1.4665638128271772,
     quantize: false,
     readout: 'variable-eos',
+    // Worth keeping as the one detector that reads the text as a language
+    // model rather than a classifier, but it is not more accurate than the
+    // Deep tier: measured on unseen domains it scores 0.68 against 0.99, and
+    // it saturates so hard that half of human documents come back above 0.9.
+    threshold: 0.5,
     windowChars: 900,
     maxTokens: 1023,
     files: [
@@ -94,34 +109,40 @@ export const MODELS: ModelSpec[] = [
     ],
     bytes: 1203565300,
     ramMb: 2_700,
-    detail: 'Qwen3-0.6B detector: a fine-tuned language model reading out at the last token.',
+    detail:
+      'Qwen3-0.6B detector: a fine-tuned language model reading out at the last token. A different kind of checker, not a more accurate one.',
   },
   {
-    id: 'textsight-v23',
+    id: 'desklib-deberta-v3-large',
     tier: 'deep',
     name: 'Deep',
-    repo: 'textsightai/textsight-detector-v23-custom',
-    license: 'unstated by the author',
+    repo: 'desklib/ai-text-detector-v1.01',
+    license: 'mit',
     kind: 'torch-classifier',
     aiIndex: 1,
-    // The card asks for the logit margin: its softmax saturates and collapses
-    // 77% of a 2,520-document benchmark into exact ties. The divisor below only
-    // turns that unbounded margin into something displayable.
-    scoreMode: 'logodds',
-    temperature: 4,
+    // Same backbone as the tier it replaces, but trained on RAID, and its head
+    // is a mean pool plus one linear layer over a single logit - so there is no
+    // softmax here and no temperature to tune.
+    readout: 'mean-pool-logit',
     quantize: false,
+    // Measured over 120 documents per set: at 0.9 this model catches 86-100% of
+    // machine text while underlining 0-3.5% of human documents. At 0.5 the false
+    // positives on unseen domains were 12%.
+    threshold: 0.9,
     windowChars: 900,
     maxTokens: 512,
     files: [
-      { path: 'config.json', bytes: 1031 },
-      { path: 'model.safetensors', bytes: 1740304440 },
-      { path: 'special_tokens_map.json', bytes: 1022 },
-      { path: 'tokenizer.json', bytes: 8332381 },
-      { path: 'tokenizer_config.json', bytes: 1686 },
+      { path: 'config.json', bytes: 890 },
+      { path: 'model.safetensors', bytes: 1736100972 },
+      { path: 'special_tokens_map.json', bytes: 286 },
+      { path: 'spm.model', bytes: 2464616 },
+      { path: 'tokenizer.json', bytes: 8656624 },
+      { path: 'tokenizer_config.json', bytes: 1315 },
     ],
-    bytes: 1748640560,
+    bytes: 1747224703,
     ramMb: 2_200,
-    detail: 'DeBERTa-v3-large detector benchmarked on 2,520 real documents, scored by logit margin.',
+    detail:
+      'DeBERTa-v3-large trained on RAID. Clearly the most accurate of the three on essays, academic prose and reviews, and it keeps quiet on human text.',
   },
 ];
 
@@ -130,13 +151,19 @@ export const TIER_ORDER: Tier[] = ['lite', 'balanced', 'deep'];
 export const DEFAULT_SETTINGS = {
   activeModelId: null as string | null,
   windowChars: 0,
-  threshold: 0.5,
+  /** null means "use the active model's own measured default". */
+  threshold: null as number | null,
   smoothing: 1,
   maxWords: 12_000,
   batchSize: 8,
 };
 
 export type Settings = typeof DEFAULT_SETTINGS;
+
+/** The threshold in force: the user's override, or the model's measured default. */
+export function effectiveThreshold(settings: Settings, spec: ModelSpec | undefined): number {
+  return settings.threshold ?? spec?.threshold ?? DEFAULT_SETTINGS.threshold ?? 0.5;
+}
 
 export function findModel(id: string | null | undefined): ModelSpec | undefined {
   if (!id) return undefined;

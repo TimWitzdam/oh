@@ -3,10 +3,10 @@ import { INFERENCE_URL } from '../paths';
 import type { Detector, ScoreUpdate } from './types';
 
 /**
- * The deep tier is a fine-tuned 0.6B language-model detector, which needs torch
- * rather than onnxruntime. It lives in a small loopback-only Python service
- * inside the same container and streams scores back as NDJSON so the UI can
- * update while the remaining windows are still running.
+ * The Balanced and Deep tiers are torch classifiers, which need torch rather
+ * than onnxruntime. They live in a small loopback-only Python service inside the
+ * same container and stream scores back as NDJSON so the UI can update while the
+ * remaining windows are still running.
  */
 
 /**

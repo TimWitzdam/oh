@@ -27,6 +27,11 @@ export function SettingsPanel({
 }) {
   const [confirming, setConfirming] = useState<string | null>(null);
   const installed = models.filter((model) => model.installed);
+  // Detector scores are not probabilities: each model needs its own cut, so the
+  // default belongs to the model and an override is opt-in.
+  const modelDefault = activeModel?.threshold ?? 0.5;
+  const threshold = settings.threshold ?? modelDefault;
+  const overridden = settings.threshold !== null && settings.threshold !== undefined;
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -105,16 +110,27 @@ export function SettingsPanel({
 
           <Field
             label="Highlight threshold"
-            hint="Sentences at or above this machine-written score get underlined and listed."
+            hint={
+              activeModel
+                ? `Sentences at or above this score get underlined and listed. ${activeModel.name} is measured to sit around ${Math.round(modelDefault * 100)}% on human text; every detector scores differently, so that is where its default comes from.`
+                : 'Sentences at or above this machine-written score get underlined and listed.'
+            }
           >
             <Slider
-              value={Math.round(settings.threshold * 100)}
+              value={Math.round(threshold * 100)}
               min={30}
-              max={90}
+              max={99}
               step={1}
               format={(value) => `${value}%`}
               onCommit={(value) => onPatch({ threshold: value / 100 })}
             />
+            {overridden ? (
+              <div className="mt-2">
+                <Button variant="quiet" onClick={() => onPatch({ threshold: null })}>
+                  Use {activeModel?.name ?? 'the model'} default ({Math.round(modelDefault * 100)}%)
+                </Button>
+              </div>
+            ) : null}
           </Field>
 
           <Field

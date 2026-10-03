@@ -1,8 +1,14 @@
-"""Loopback-only inference service for the deep detector tier.
+"""Loopback-only inference service for the torch detector tiers.
 
-The deep model is a 0.6B language-model classifier, which needs torch. It is the
-only model that does, so it runs here while the two encoder tiers run through
-onnxruntime in the Next.js process. Both share one container and one volume.
+The Balanced and Deep tiers are torch classifiers, so they run here while the
+Lite tier runs through onnxruntime in the Next.js process. Both share one
+container and one volume.
+
+Two heads are supported. `variable-eos` models append an EOS token and read a
+two-logit classifier off it. `mean-pool-logit` checkpoints ship no modelling
+code at all - just a bare encoder under a `model.` prefix plus a
+`classifier.weight [1, H]` tensor - so those weights are loaded by hand and the
+score is a sigmoid over the single pooled logit.
 """
 
 from __future__ import annotations
@@ -21,7 +27,8 @@ import torch
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from safetensors.torch import load_file
+from transformers import AutoConfig, AutoModel, AutoModelForSequenceClassification, AutoTokenizer
 
 DATA_DIR = Path(os.environ.get("OH_DATA_DIR", "/data")).resolve()
 MODELS_DIR = DATA_DIR / "models"
@@ -45,6 +52,15 @@ class LoadedModel:
     model: Any
     load_ms: int
     threads: int = field(default=0)
+    head: tuple[Any, Any] | None = None
+
+    def pooled_logit(self, inputs: dict[str, Any]) -> float:
+        assert self.head is not None
+        weight, bias = self.head
+        hidden = self.model(**inputs).last_hidden_state
+        mask = inputs["attention_mask"].unsqueeze(-1).to(hidden.dtype)
+        pooled = (hidden * mask).sum(1) / mask.sum(1)
+        return float((pooled @ weight.T + bias)[0])
 
     def score(self, text: str) -> float:
         manifest = self.manifest
@@ -64,6 +80,15 @@ class LoadedModel:
                 "input_ids": torch.tensor([ids + [self.tokenizer.eos_token_id]]),
                 "attention_mask": torch.ones(1, len(ids) + 1, dtype=torch.long),
             }
+        elif readout == "mean-pool-logit":
+            inputs = self.tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=max_tokens,
+            )
+            with torch.inference_mode():
+                return 1.0 / (1.0 + math.exp(-self.pooled_logit(inputs)))
         else:
             inputs = self.tokenizer(
                 text,
@@ -76,14 +101,6 @@ class LoadedModel:
             logits = self.model(**inputs).logits[0].float()
 
         index = min(int(manifest.get("aiIndex", 1)), logits.shape[-1] - 1)
-
-        if manifest.get("scoreMode") == "logodds":
-            # Unbounded margin between the two class logits, squashed for display.
-            # Softmax saturates on these models and hides the ranking.
-            margin = float(logits[index] - logits[1 - index])
-            temperature = float(manifest.get("temperature") or 4.0)
-            return 1.0 / (1.0 + math.exp(-margin / temperature))
-
         temperature = manifest.get("temperature")
         if temperature:
             logits = logits / float(temperature)
@@ -113,9 +130,34 @@ def load_sync(model_id: str) -> LoadedModel:
     directory = MODELS_DIR / model_id
     started = time.perf_counter()
     tokenizer = AutoTokenizer.from_pretrained(directory, local_files_only=True)
-    model = AutoModelForSequenceClassification.from_pretrained(
-        directory, dtype=torch.float32, local_files_only=True
-    )
+    head = None
+
+    if manifest.get("readout") == "mean-pool-logit":
+        # The checkpoint is a bare deberta-v3-large encoder plus one linear
+        # layer. from_pretrained would report every encoder tensor as missing and
+        # hand back a randomly initialised model, so the weights are mapped by
+        # hand and a gap is an error rather than a warning.
+        config = AutoConfig.from_pretrained(directory, local_files_only=True)
+        config.architectures = ["DebertaV2Model"]
+        # Built from the config rather than from_pretrained: the checkpoint keys
+        # do not match this class, so the loader would read 1.7 GB, report every
+        # tensor as missing and hand back random weights that the load_state_dict
+        # below then overwrites.
+        model = AutoModel.from_config(config)
+        blob = load_file(directory / "model.safetensors")
+        head = (blob["classifier.weight"].float(), blob["classifier.bias"].float())
+        encoder_state = {
+            key[len("model."):]: value for key, value in blob.items() if key.startswith("model.")
+        }
+        missing, _ = model.load_state_dict(encoder_state, strict=False)
+        if missing:
+            raise RuntimeError(f"{model_id}: encoder is missing {len(missing)} weights")
+        del blob, encoder_state
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            directory, dtype=torch.float32, local_files_only=True
+        )
+
     model.eval()
     if manifest.get("quantize"):
         model = torch.ao.quantization.quantize_dynamic(
@@ -127,6 +169,7 @@ def load_sync(model_id: str) -> LoadedModel:
         tokenizer=tokenizer,
         model=model,
         load_ms=int((time.perf_counter() - started) * 1000),
+        head=head,
     )
     _loaded[model_id] = loaded
     return loaded
