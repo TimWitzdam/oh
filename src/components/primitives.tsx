@@ -177,7 +177,7 @@ export function NumberInput({
         id={field?.inputId}
         aria-labelledby={field?.labelId}
         aria-describedby={field?.hintId}
-        className="focusable w-28 rounded-md border border-rule-strong bg-paper-raised px-3 py-2 font-mono text-sm text-ink"
+        className="focusable w-28 rounded-md border border-rule-strong bg-paper-raised px-3 py-2 text-sm tabular-nums text-ink"
         value={value}
         min={min}
         max={max}
@@ -226,7 +226,7 @@ export function Slider({
         disabled={disabled}
         onChange={(event) => onCommit(Number(event.target.value))}
       />
-      <span className="w-28 shrink-0 text-right font-mono text-sm text-ink">{format(value)}</span>
+      <span className="w-28 shrink-0 text-right text-sm tabular-nums text-ink">{format(value)}</span>
     </span>
   );
 }

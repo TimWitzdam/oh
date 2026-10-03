@@ -152,4 +152,4 @@ I'm also available via mail: [contact@witzdam.com](mailto:contact@witzdam.com)
 
 ## Licences
 
-Application code: MIT, see [LICENSE](LICENSE). Bundled fonts: Inter and JetBrains Mono, both SIL Open Font License 1.1 (`src/app/fonts`, licence text in `src/app/fonts/OFL.txt`). Models keep their own licences and are downloaded from Hugging Face rather than vendored: Apache-2.0 for the Lite and Balanced repos, MIT for the Deep one. Each card in the picker names the repository it came from, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) has the full list.
+Application code: MIT, see [LICENSE](LICENSE). Bundled font: Inter, SIL Open Font License 1.1 (`src/app/fonts`, licence text in `src/app/fonts/OFL.txt`). Models keep their own licences and are downloaded from Hugging Face rather than vendored: Apache-2.0 for the Lite and Balanced repos, MIT for the Deep one. Each card in the picker names the repository it came from, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) has the full list.

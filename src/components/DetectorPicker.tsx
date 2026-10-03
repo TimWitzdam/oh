@@ -188,7 +188,7 @@ function Meter({
             style={{ width: `${width}%` }}
           />
         </span>
-        <span className="w-32 shrink-0 text-right font-mono text-sm whitespace-nowrap text-ink">
+        <span className="w-32 shrink-0 text-right text-sm whitespace-nowrap text-ink">
           {value}
         </span>
       </dd>

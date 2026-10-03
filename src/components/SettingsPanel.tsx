@@ -4,7 +4,7 @@ import { useId, useState } from 'react';
 
 import type { ModelInfo } from '@/lib/types';
 import type { Settings } from '@/lib/catalog';
-import { Button, Field, Hint, NumberInput, Panel, Slider } from './primitives';
+import { Button, Field, Hint, NumberInput, Slider } from './primitives';
 
 export function SettingsPanel({
   settings,
@@ -81,9 +81,6 @@ export function SettingsPanel({
                         : 'Not downloaded yet'}
                     </span>
                   </button>
-                  <span className="shrink-0 pt-0.5 font-mono text-sm text-ink-soft">
-                    {selected ? 'active' : model.installed ? 'use' : '—'}
-                  </span>
                 </div>
               );
             })}
@@ -215,13 +212,6 @@ export function SettingsPanel({
             </div>
           </section>
         ) : null}
-
-        <Panel className="p-4">
-          <p className="text-sm text-ink-soft">
-            Settings are stored in a single JSON file next to the model weights on the server
-            volume. There is no account and nothing is sent anywhere.
-          </p>
-        </Panel>
       </div>
     </div>
   );

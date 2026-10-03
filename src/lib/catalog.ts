@@ -79,8 +79,7 @@ export const MODELS: ModelSpec[] = [
     ],
     bytes: 130672011,
     ramMb: 420,
-    detail:
-      'RoBERTa-large encoder from 2023, int8 quantised. Cheapest and quickest, and the least accurate on writing it has not seen.',
+    detail: 'RoBERTa-large encoder',
   },
   {
     id: 'qwen3-06b-detector',
@@ -109,8 +108,7 @@ export const MODELS: ModelSpec[] = [
     ],
     bytes: 1203565300,
     ramMb: 2_700,
-    detail:
-      'Qwen3-0.6B detector: a fine-tuned language model reading out at the last token. A different kind of checker, not a more accurate one.',
+    detail: 'Qwen3-0.6B detector',
   },
   {
     id: 'desklib-deberta-v3-large',
@@ -141,8 +139,7 @@ export const MODELS: ModelSpec[] = [
     ],
     bytes: 1747224703,
     ramMb: 2_200,
-    detail:
-      'DeBERTa-v3-large trained on RAID. Clearly the most accurate of the three on essays, academic prose and reviews, and it keeps quiet on human text.',
+    detail: 'DeBERTa-v3-large encoder',
   },
 ];
 

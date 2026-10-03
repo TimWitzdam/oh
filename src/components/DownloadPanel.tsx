@@ -43,7 +43,7 @@ function describe(job: DownloadJob): string | null {
 
 function Cell({ width, children }: { width: number; children: string }) {
   return (
-    <span className="inline-block shrink-0 font-mono tabular-nums" style={{ width: `${width}ch` }}>
+    <span className="inline-block shrink-0 tabular-nums" style={{ width: `${width}ch` }}>
       {children}
     </span>
   );
@@ -59,7 +59,7 @@ function Dot() {
 
 /**
  * Progress arrives several times a second, so each number gets its own
- * fixed-width monospace cell: the byte count can never change the width of
+ * fixed-width tabular cell: the byte count can never change the width of
  * anything around it, and the rate and ETA hold their slot even before the
  * first sample lands. Three lines with reserved heights mean no reflow, so the
  * progress bar and the buttons below stay put for the whole download.

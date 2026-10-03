@@ -11,14 +11,6 @@ const inter = localFont({
   display: 'swap',
 });
 
-const mono = localFont({
-  src: './fonts/JetBrainsMonoVariable.woff2',
-  weight: '100 800',
-  style: 'normal',
-  variable: '--font-mono-local',
-  display: 'swap',
-});
-
 export const metadata: Metadata = {
   title: 'oh',
   description: 'Self-hosted AI text detector. Runs on CPU, offline, no accounts.',
@@ -31,7 +23,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable}`}>
+    <html lang="en" className={inter.variable}>
       <body className="min-h-screen antialiased">{children}</body>
     </html>
   );

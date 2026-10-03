@@ -2,7 +2,6 @@
 
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-mono-local), ui-monospace, monospace;
 
   --color-paper: #f7f5f0;
   --color-paper-raised: #fffdf9;
@@ -89,5 +88,12 @@
 
   .sentence-flagged {
     box-shadow: inset 0 -2px 0 0 var(--color-machine);
+  }
+
+  /* The selected sentence. An outline rather than a box shadow, so it stacks
+     with the underline above instead of replacing it. */
+  .sentence-active {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 1px;
   }
 }

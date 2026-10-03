@@ -5,17 +5,15 @@ The items below keep their own licences.
 
 ## Bundled fonts
 
-`src/app/fonts` ships two font binaries with the app:
+`src/app/fonts` ships one font binary with the app:
 
 | File | Font | Copyright | Licence |
 | --- | --- | --- | --- |
 | `InterVariable.woff2` | Inter | Copyright (c) 2016 The Inter Project Authors | SIL Open Font License 1.1 |
-| `JetBrainsMonoVariable.woff2` | JetBrains Mono | Copyright (c) 2020 The JetBrains Mono Project Authors | SIL Open Font License 1.1 |
 
-Both fonts are redistributed unmodified, so their Reserved Font Names are
-intact. The full OFL 1.1 text, with both copyright statements, is in
-[`src/app/fonts/OFL.txt`](src/app/fonts/OFL.txt) and ships alongside the
-binaries as the licence requires.
+It is redistributed unmodified, so its Reserved Font Name is intact. The full
+OFL 1.1 text is in [`src/app/fonts/OFL.txt`](src/app/fonts/OFL.txt) and ships
+alongside the binary as the licence requires.
 
 ## Detection models
 
