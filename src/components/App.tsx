@@ -102,7 +102,22 @@ export function App({ initialState }: { initialState: AppState }) {
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 pb-16">
       <header className="sticky top-0 z-30 -mx-5 border-b border-rule bg-paper/95 px-5 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">oh</h1>
+          <h1 className="group relative text-2xl font-semibold tracking-tight text-ink">
+            <span
+              tabIndex={0}
+              aria-describedby="name-note"
+              className="cursor-help rounded-sm underline decoration-dotted decoration-rule-strong underline-offset-4"
+            >
+              oh
+            </span>
+            <span
+              id="name-note"
+              role="tooltip"
+              className="pointer-events-none absolute left-0 top-full z-40 mt-2 w-56 rounded-md border border-rule bg-paper-raised px-3 py-2 text-sm font-normal leading-snug text-ink-soft opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+            >
+              The name is the sound you make once you find out your paper was flagged.
+            </span>
+          </h1>
           <span className="text-base text-ink-soft">
             {activeModel
               ? `${activeModel.name} detector · ${formatRam(activeModel.ramMb)} of weights`
@@ -149,9 +164,10 @@ export function App({ initialState }: { initialState: AppState }) {
         ) : activeModel ? (
           <Workspace
             model={activeModel}
+            models={models}
             threshold={state.settings.threshold}
             maxWords={state.settings.maxWords}
-            onOpenModels={() => setView('detectors')}
+            onSelectModel={(modelId) => void patch({ activeModelId: modelId })}
           />
         ) : (
           <p className="text-base text-ink-soft">Pick a detector to start analysing text.</p>
