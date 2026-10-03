@@ -7,8 +7,12 @@ import { buildWindows, splitSentences } from './segment';
 
 let inflight = 0;
 
+// Route handlers are bundled separately, so the cache hangs off globalThis to
+// make sure every handler looks at the same set of resident weights.
+const store = globalThis as typeof globalThis & { __ohDetectors?: Map<string, Detector> };
+
 /** One detector per model id, reused across requests so weights load once. */
-const cache = new Map<string, Detector>();
+const cache: Map<string, Detector> = (store.__ohDetectors ??= new Map());
 
 export function detectorFor(spec: ModelSpec): Detector {
   const existing = cache.get(spec.id);
@@ -183,4 +187,18 @@ function countWords(text: string): number {
 export async function releaseDetectors(): Promise<void> {
   await Promise.all([...cache.values()].map((detector) => detector.dispose()));
   cache.clear();
+}
+
+/** Drops one detector's weights. Returns false when it was not loaded at all. */
+export async function releaseDetector(modelId: string): Promise<boolean> {
+  const detector = cache.get(modelId);
+  if (!detector) return false;
+  await detector.dispose();
+  cache.delete(modelId);
+  return true;
+}
+
+/** Ids of the models whose weights are currently held in memory. */
+export function residentModelIds(): string[] {
+  return [...cache.keys()];
 }

@@ -25,6 +25,8 @@ export interface AppState {
   settings: Settings;
   downloads: DownloadJob[];
   models: ModelInfo[];
+  /** Models whose weights the server currently holds in memory. */
+  loadedModelIds: string[];
 }
 
 export interface SegmentResult {

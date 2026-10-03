@@ -44,6 +44,15 @@ export async function removeModel(modelId: string): Promise<void> {
   await fetch(`/api/models/${encodeURIComponent(modelId)}`, { method: 'DELETE' });
 }
 
+export async function unloadModel(modelId: string): Promise<boolean> {
+  const response = await fetch(`/api/models/${encodeURIComponent(modelId)}/unload`, {
+    method: 'POST',
+  });
+  const data = (await response.json().catch(() => ({}))) as { unloaded?: boolean; error?: string };
+  if (!response.ok) throw new Error(data.error ?? `unload failed: ${response.status}`);
+  return data.unloaded ?? false;
+}
+
 /** Streams download progress as server-sent events. */
 export async function streamDownload(
   jobId: string,
