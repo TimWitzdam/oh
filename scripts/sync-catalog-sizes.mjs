@@ -37,6 +37,17 @@ const REPOS = {
       'tokenizer_config.json',
     ],
   },
+  'desklib-deberta-v3-large': {
+    repo: 'desklib/ai-text-detector-v1.01',
+    files: [
+      'config.json',
+      'model.safetensors',
+      'special_tokens_map.json',
+      'spm.model',
+      'tokenizer.json',
+      'tokenizer_config.json',
+    ],
+  },
 };
 
 const catalogPath = new URL('../src/lib/catalog.ts', import.meta.url);
@@ -59,7 +70,10 @@ for (const [id, { repo, files }] of Object.entries(REPOS)) {
     `(id: '${id}',[\\s\\S]*?files: \\[)[\\s\\S]*?(\\n    \\],\\n    bytes: )[\\d_]+`,
   );
   if (!listPattern.test(source)) {
-    throw new Error(`could not find the ${id} file list in the catalog`);
+    // Candidates come and go; a repo that is no longer in the catalog is not an
+    // error, it just has nothing to write.
+    console.log(`${id}: not in the catalog, skipped`);
+    continue;
   }
   source = source.replace(
     listPattern,
