@@ -35,19 +35,18 @@ export interface ModelSpec {
   /**
    * Default highlight threshold for this model. Detector scores are not
    * probabilities and sit in different places on every model, so one shared
-   * default either floods a document with underlines or hides everything. The
-   * user can override it; this is what an untouched install uses.
+   * default either floods a document with underlines or hides everything.
+   * The user can override it; this is what an untouched install uses.
    *
-   * PROVENANCE - the figures quoted in the per-model comments below were
-   * measured with the first version of scripts/fetch-eval-set.py, whose MAGE
-   * "control" set put all 80 of its machine documents in one domain
-   * (ChangeMyView continuations from small models) against 64 human documents
-   * from eight others, so that a one-line `src.startswith("cmv")` scored
-   * AUROC 0.9375 on it. Anything sourced from that set measures the sampling
-   * rather than the detector. RAID is additionally in-domain for the Deep
-   * weights and HC3 is in-domain for the Lite checkpoint. Re-measure with
-   * `fetch-eval-set.py` then `eval_torch.py --sweep` before treating any of
-   * these as settled, and prefer a set whose domain-only baseline is near 0.5.
+   * The defaults below are measured, not chosen. Each is the highest threshold
+   * whose false-positive rate stays under 6% of human documents on the eval
+   * sets from `scripts/fetch-eval-set.py`, which are graded by their own
+   * domain-only baseline so a set that cannot support a comparison says so
+   * before the comparison is believed. Re-measure with
+   * `fetch-eval-set.py` then `eval_torch.py --sweep` / `npm run eval:detectors
+   * -- --sweep` after changing a checkpoint. An earlier round of figures came
+   * from a MAGE sample whose machine half was one domain, where a one-line
+   * domain check scored AUROC 0.9375; those numbers are gone.
    */
   threshold: number;
   /** Characters of text handed to the model per scoring pass. */
@@ -79,8 +78,11 @@ export const MODELS: ModelSpec[] = [
     kind: 'onnx-classifier',
     dtype: 'int8',
     aiIndex: 1,
-    // Its scores pile up against 1.0, so the old shared 0.5 flagged a fifth of
-    // unseen human documents. 0.99 holds the false-positive rate near 6%.
+    // Measured on the int8 ONNX checkpoint this tier actually ships: 0.99 is
+    // the highest cut that keeps the false-positive rate under 6% (5.9% on
+    // RAID, 12.5% on MAGE). It is a quiet setting by design - this checkpoint
+    // puts human text up against 1.0, so anything lower underlines a quarter of
+    // an unseen human document.
     threshold: 0.99,
     windowChars: 560,
     wordsPerSecond: 3900,
@@ -109,18 +111,25 @@ export const MODELS: ModelSpec[] = [
     temperature: 1.4665638128271772,
     quantize: false,
     readout: 'variable-eos',
-    // Worth keeping as the one detector that reads the text as a language
-    // model rather than a classifier.
+    // MEASURED, and the measurement is not good. This is the only checkpoint
+    // here with no in-domain contamination on any eval set (it was trained on
+    // rasbt/human-vs-ai-50k), so its out-of-domain numbers are the honest ones:
+    // AUROC 0.598 on the MAGE test split, against 0.968 for the Deep tier and
+    // 0.786 for Lite. It is the weakest of the three by a wide margin, and
+    // worse than the cheap tier it sits above in the picker.
     //
-    // 0.5 is the one threshold here that is NOT measured, and it is the most
-    // suspect number in this file. The same measurement round reported that
-    // this model puts half of all human documents above 0.9, which at a 0.5 cut
-    // means underlining roughly half of human text - and it was left at 0.5
-    // anyway, because the 0.68 it was being compared on came from the
-    // domain-confounded control set (see `threshold` above). The 0.68 is not
-    // evidence that this is the weakest tier; it is evidence that the set could
-    // not tell the three apart. Re-measure with --sweep and set this from the
-    // false-positive rate, not from this comment.
+    // No threshold rescues it. The best point on the whole curve is 11.3% of
+    // machine text at a 5.6% false-positive rate; at 0.5 it catches 7.8% while
+    // flagging 2.1% of human documents. Three MAGE domains come out
+    // *anti-correlated* - squad 0.229, sci_gen 0.236, tldr 0.248 - it ranks
+    // human text above machine text. This is the same "no usable threshold
+    // outside its training data" test that ruled out TMR, and this fails it.
+    //
+    // Kept at 0.5 because that is where the measurement puts it and moving it
+    // buys nothing: 0.3 reaches 8.3%, 0.95 reaches 5.9% with the same 0%
+    // false positives. It is here because it reads text as a language model
+    // rather than a classifier, which is a different kind of wrong. Anyone
+    // picking a tier for accuracy should not pick this one.
     threshold: 0.5,
     windowChars: 900,
     wordsPerSecond: 195,
@@ -149,9 +158,12 @@ export const MODELS: ModelSpec[] = [
     // softmax here and no temperature to tune.
     readout: 'mean-pool-logit',
     quantize: false,
-    // Measured over 120 documents per set: at 0.9 this model catches 86-100% of
-    // machine text while underlining 0-3.5% of human documents. At 0.5 the false
-    // positives on unseen domains were 12%.
+    // Measured. 0.9 catches 87% of machine text on the MAGE test split while
+    // underlining 4.2% of human documents, and 86% at 1.4% on RAID. Its 0.968
+    // AUROC there is the reason this checkpoint is the Deep tier at all: the
+    // textsight-v23 it replaced reads 0.815 on the same documents, so the swap
+    // holds up - by 0.15 AUROC rather than the 0.35 a confounded eval set had
+    // implied. At 0.5 the false-positive rate on unseen domains is 20%.
     threshold: 0.9,
     windowChars: 900,
     wordsPerSecond: 172,

@@ -6,8 +6,8 @@ import { DownloadPanel } from './DownloadPanel';
 import { CheckIcon } from './icons';
 
 const TIER_NOTE: Record<ModelInfo['tier'], string> = {
-  lite: 'Smallest and fastest, weakest on unseen writing',
-  balanced: 'A different kind of checker, not a sharper one',
+  lite: 'Smallest and fastest, and steadier on unseen writing than Balanced',
+  balanced: 'Reads text as a language model, but measures worst on unseen writing',
   deep: 'Most accurate, slowest',
 };
 

@@ -52,6 +52,15 @@ const MODELS = {
 };
 
 const args = process.argv.slice(2);
+
+// Detector scores are not probabilities and do not agree on where they sit: the
+// Lite checkpoint piles its human text up against 1.0, while the torch Qwen one
+// piles up against 0.000. A sweep starting at 0.5 measures the whole useful
+// range of the first and none of the second. This spans both ends; the cut that
+// matters is wherever the FPR column crosses the budget, and that can be
+// anywhere.
+const SWEEP_THRESHOLDS = [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.9, 0.93, 0.95, 0.97, 0.99];
+
 const sets = args.includes('--set')
   ? [args[args.indexOf('--set') + 1]].filter(Boolean)
   : ['raid', 'control', 'hc3'].filter((name) => existsSync(new URL(`../eval/${name}.jsonl`, import.meta.url)));
@@ -157,7 +166,7 @@ for (const key of picked) {
       // shippable if some threshold keeps the false-positive rate sane on every
       // set at once. AUROC alone does not say whether one exists.
       if (args.includes('--sweep')) {
-        for (const threshold of [0.5, 0.7, 0.8, 0.9, 0.93, 0.95, 0.97, 0.99]) {
+        for (const threshold of SWEEP_THRESHOLDS) {
           const { fpr, tpr } = rates(set, scores, aiIndex, threshold);
           console.log(`       thr ${threshold.toFixed(2)}  TPR ${(tpr * 100).toFixed(1).padStart(5)}%  FPR ${(fpr * 100).toFixed(1).padStart(5)}%`);
         }

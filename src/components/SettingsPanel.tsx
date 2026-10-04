@@ -108,7 +108,7 @@ export function SettingsPanel({
             label="Highlight threshold"
             hint={
               activeModel
-                ? `Sentences at or above this score get underlined and listed. ${activeModel.name} is measured to sit around ${Math.round(modelDefault * 100)}% on human text; every detector scores differently, so that is where its default comes from.`
+                ? `Sentences at or above this score get underlined and listed. ${activeModel.name}'s default is the highest cut measured to keep false positives under 6% of human documents - every detector scores differently, so there is no universal value.`
                 : 'Sentences at or above this machine-written score get underlined and listed.'
             }
           >

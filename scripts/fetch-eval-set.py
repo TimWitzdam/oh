@@ -26,7 +26,7 @@ people's datasets, not to this repo:
 
 Usage:
     python3 scripts/fetch-eval-set.py [--human-per-domain 40] [--ai-per-group 6]
-                            [--control-per-cell 8] [--hc3 200] [--seed 7]
+                            [--control-per-cell 12] [--hc3 200] [--seed 7]
 """
 
 from __future__ import annotations
@@ -175,19 +175,38 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
 def split_src(src: str) -> tuple[str, str]:
     """Split MAGE's `src` into (domain, task).
 
-    `src` is either `<domain>_human` or `<domain>_machine_<task>_<generator>`.
-    Taking the last underscore-separated token, as this used to, yielded
-    `human`, `30b` and `gpt-3.5-trubo` - generator names rather than domains -
-    so every per-domain figure reported for this set was a per-generator figure
-    with too few documents to clear the reporting threshold, and the set
-    silently produced no domain breakdown at all.
+    There are two conventions in this one column, and the split needs both:
+
+        cmv_human                          -> cmv, human
+        cmv_machine_continuation_gpt-4     -> cmv, continuation
+        cnn_human                          -> cnn, human
+        cnn_gpt4                           -> cnn, gpt4
+        cnn_human_para                     -> cnn, human
+
+    The second family is the summarisation domains, where the machine half is
+    gpt-4 with no `machine` marker and an optional `_para` suffix. Note that
+    `cnn_human_para` is labelled *machine*: there "human" names the paragraph
+    the model was prompted with, not the author of the output. Handling only
+    the first convention sent every one of those rows down the fallback, so each
+    distinct `src` became its own "domain" and 96 documents reported a domain
+    that was really a generator name.
+
+    Taking the last underscore-separated token, as an earlier version did, is
+    wrong for the other reason: it yields `human`, `30b` and `gpt-3.5-trubo`, so
+    every per-domain figure is a per-generator figure with too few documents to
+    clear the reporting threshold.
     """
+    if src.endswith("_para"):
+        src = src[: -len("_para")]
     if src.endswith("_human"):
         return src[: -len("_human")], "human"
     marker = "_machine_"
     if marker in src:
         domain, _, rest = src.partition(marker)
         return domain, rest.partition("_")[0]
+    domain, _, rest = src.rpartition("_")
+    if domain:
+        return domain, rest
     return src, "?"
 
 
@@ -334,8 +353,16 @@ def report_control(rows: list[dict]) -> None:
         print(f"            tasks {dict(sorted(tasks.items()))}")
 
     shared = sorted({row["domain"] for row in humans} & {row["domain"] for row in machine})
+    human_only = sorted({row["domain"] for row in humans} - {row["domain"] for row in machine})
+    machine_only = sorted({row["domain"] for row in machine} - {row["domain"] for row in humans})
     score, domain = domain_baseline(rows)
     print(f"    domains in both halves: {len(shared)} {shared}")
+    if machine_only:
+        # hswag and roct ship no human documents in this split, so their machine
+        # rows can never produce a false positive and only inflate the TPR.
+        print(f"    machine-only domains (no human counterpart, TPR-only): {machine_only}")
+    if human_only:
+        print(f"    human-only domains (no machine counterpart): {human_only}")
     print(f"    domain-only AUROC (no model, best single domain '{domain}'): {score:.4f}")
     if score > 0.75:
         print(
@@ -426,9 +453,12 @@ def main() -> None:
     parser.add_argument(
         "--control-per-cell",
         type=int,
-        default=8,
+        default=12,
         help="documents per (label, domain, task) cell of the MAGE split; the "
-        "total is whatever that produces, which is the point",
+        "total is whatever that produces, which is the point. A human cell "
+        "holds exactly this many documents, so anything below 10 leaves every "
+        "domain short of the eval scripts' 10-human floor and the per-domain "
+        "AUROC column comes out empty.",
     )
     parser.add_argument("--hc3", type=int, default=200)
     parser.add_argument("--seed", type=int, default=7)

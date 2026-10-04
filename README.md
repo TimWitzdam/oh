@@ -88,17 +88,24 @@ machine: an **AMD Ryzen 7 7840U (8 cores / 16 threads)**, 32 GB RAM, Linux, with
 Three tiers, all CPU-only, all downloaded from Hugging Face on first use and
 cached in the data volume. Nothing is vendored in the image.
 
-| Tier | Model | Size | Best at |
-| --- | --- | --- | --- |
-| Lite | RoBERTa-large, int8 quantised (2023) | 125 MB | Being fast and cheap. The least accurate on writing it has not seen. |
-| Balanced | Qwen3-0.6B fine-tuned, reads out at the last token | 1.1 GB | A different kind of checker rather than a sharper one. Holds the most RAM of the three. |
-| Deep | DeBERTa-v3-large trained on RAID | 1.7 GB | Accuracy on RAID-style domains, which is what it was trained on. |
+| Tier | Model | Size | Measured AUROC on unseen writing | Best at |
+| --- | --- | --- | --- | --- |
+| Lite | RoBERTa-large, int8 quantised (2023) | 125 MB | 0.79 | Being fast and cheap. More accurate on unseen writing than Balanced. |
+| Balanced | Qwen3-0.6B fine-tuned, reads out at the last token | 1.1 GB | 0.60 | Nothing, on accuracy. It reads text as a language model rather than a classifier, which is a different kind of checker. Holds the most RAM of the three. |
+| Deep | DeBERTa-v3-large trained on RAID | 1.7 GB | 0.97 | Accuracy. |
 
-The tier ordering above is **not yet measured on a trustworthy set.** The
-comparison that put Deep here was run against an eval set whose machine half
-came from a single domain, where a one-line domain check scored AUROC 0.94; see
-`scripts/fetch-eval-set.py`. The default highlight thresholds are provisional
-for the same reason. Re-run the numbers before treating this table as fact.
+The AUROC column is measured on the MAGE test split (`scripts/fetch-eval-set.py`),
+which is the only one of the three eval sets that none of these checkpoints was
+trained on, and which is built so both halves cover the same domains — each set
+is graded by its own domain-only baseline before any model is run against it.
+
+Two things that column says which the tier order does not. **Balanced is the
+weakest tier, not Lite** — it has no threshold that works on unseen writing: its
+best point catches 11% of machine text at a 5.6% false-positive rate, and on
+three domains it ranks human text above machine text. And **Deep is genuinely
+the most accurate**, at 0.97 against 0.82 for the textsight-v23 checkpoint it
+replaced, so that swap holds — by 0.15, not by the 0.35 an earlier eval set
+implied. See `THIRD_PARTY_NOTICES.md` for licences.
 
 
 

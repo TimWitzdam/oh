@@ -96,6 +96,15 @@ def sigmoid(x: float) -> float:
     return 1.0 / (1.0 + math.exp(-x)) if x > -700 else 0.0
 
 
+# Detector scores are not probabilities and do not agree on where they sit: the
+# Qwen checkpoint piles its human text up against 0.000, while the RoBERTa one
+# piles up against 1.0. A sweep starting at 0.5 therefore measures the whole
+# useful range of the second and none of the first, and reports the first as
+# "flags nothing at any threshold" when its real operating point is simply
+# below the grid. This spans both ends; the cut that matters is wherever the
+# FPR column crosses the budget, and that can be anywhere.
+SWEEP_THRESHOLDS = (0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.9, 0.93, 0.95, 0.97, 0.99)
+
 def build(spec):
     """Returns (logit_fn, tokenizer) where logit_fn(text) -> raw class logits.
 
@@ -396,7 +405,7 @@ def main():
                     elif result["domain_baseline"] <= 0.75:
                         print("     no domain has 10 human and 10 machine documents")
                     if sweep:
-                        for threshold in (0.5, 0.7, 0.8, 0.9, 0.93, 0.95, 0.97, 0.99):
+                        for threshold in SWEEP_THRESHOLDS:
                             fpr, tpr = rates(rows, scores, ai_index, threshold)
                             print(f"       thr {threshold:.2f}  TPR {tpr * 100:5.1f}%  FPR {fpr * 100:5.1f}%")
         except Exception as exc:  # noqa: BLE001
