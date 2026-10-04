@@ -21,49 +21,6 @@ is the sound you make once you find out your paper was flagged.
 - Your text stays in the browser between visits, and never leaves the machine
 - Runs entirely on your CPU, no GPU and no accounts
 
-## Hardware Requirements
-
-Yes, this might even be an important section to read because of the usage of our highly scarce RAM.
-
-### Per tier
-
-Every number below is measured, not estimated. All figures come from one
-machine: an **AMD Ryzen 7 7840U (8 cores / 16 threads)**, 32 GB RAM, Linux, with the container's default `OMP_NUM_THREADS=4`. 
-
-|  | Lite | Balanced | Deep |
-| --- | --- | --- | --- |
-| Runs on | onnxruntime, in the app process | torch, in the Python service | torch, in the Python service |
-| Model | [`onnx-community/chatgpt-detector-roberta-ONNX`](https://huggingface.co/onnx-community/chatgpt-detector-roberta-ONNX) | [`rasbt/ai-text-detector-qwen3-0.6b-variable`](https://huggingface.co/rasbt/ai-text-detector-qwen3-0.6b-variable) | [`desklib/ai-text-detector-v1.01`](https://huggingface.co/desklib/ai-text-detector-v1.01) |
-| Licence | Apache-2.0 | Apache-2.0 | MIT |
-| Download | 125 MB | 1.1 GB | 1.7 GB |
-| **RAM, whole container, model loaded** | **0.8 GB** | **2.7 GB** | **2.2 GB** |
-| Speed | ~3,900 words/s | ~195 words/s | ~172 words/s |
-| A 12,000-word document | ~3 s | ~62 s | ~70 s |
-| Cores used | all of them | `OMP_NUM_THREADS` | `OMP_NUM_THREADS` |
-
-
-### Tuning cores
-
-`OMP_NUM_THREADS` defines the maximum number of threads that should be used.
-
-| `OMP_NUM_THREADS` | Lite | Balanced | Deep |
-| --- | --- | --- | --- |
-| 1 | 0.8 s | 33.0 s | 34.7 s |
-| 2 | 0.6 s | 19.7 s | 20.7 s |
-| 4 (default) | 0.8 s | 13.0 s | 13.6 s |
-| 8 | 0.8 s | 7.6 s | 8.1 s |
-
-## Models
-
-Three tiers, all CPU-only, all downloaded from Hugging Face on first use and
-cached in the data volume. Nothing is vendored in the image.
-
-| Tier | Model | Size | Best at |
-| --- | --- | --- | --- |
-| Lite | RoBERTa-large, int8 quantised (2023) | 125 MB | Being fast and cheap. The least accurate on writing it has not seen. |
-| Balanced | Qwen3-0.6B fine-tuned, reads out at the last token | 1.1 GB | A different kind of checker rather than a sharper one. Holds the most RAM of the three. |
-| Deep | DeBERTa-v3-large trained on RAID | 1.7 GB | Accuracy. Clearly the best of the three on essays, academic prose and reviews, and it stays quiet on human text. |
-
 
 ## 🚀 Deploy oh for yourself
 
@@ -95,6 +52,49 @@ volumes:
   oh-data:
     driver: local
 ```
+
+## Hardware Requirements
+
+Yes, this might even be an important section to read because of the usage of our highly scarce RAM.
+
+### Per tier
+
+Every number below is measured, not estimated. All figures come from one
+machine: an **AMD Ryzen 7 7840U (8 cores / 16 threads)**, 32 GB RAM, Linux, with the container's default `OMP_NUM_THREADS=4`. 
+
+|  | Lite | Balanced | Deep |
+| --- | --- | --- | --- |
+| Runs on | onnxruntime, in the app process | torch, in the Python service | torch, in the Python service |
+| Model | [`onnx-community/chatgpt-detector-roberta-ONNX`](https://huggingface.co/onnx-community/chatgpt-detector-roberta-ONNX) | [`rasbt/ai-text-detector-qwen3-0.6b-variable`](https://huggingface.co/rasbt/ai-text-detector-qwen3-0.6b-variable) | [`desklib/ai-text-detector-v1.01`](https://huggingface.co/desklib/ai-text-detector-v1.01) |
+| Licence | Apache-2.0 | Apache-2.0 | MIT |
+| Download | 125 MB | 1.1 GB | 1.7 GB |
+| **RAM** | **0.8 GB** | **2.7 GB** | **2.2 GB** |
+| Speed | ~3,900 words/s | ~195 words/s | ~172 words/s |
+| A 12,000-word document | ~3 s | ~62 s | ~70 s |
+| Cores used | all of them | `OMP_NUM_THREADS` | `OMP_NUM_THREADS` |
+
+
+### Tuning cores
+
+`OMP_NUM_THREADS` defines the maximum number of threads that should be used.
+
+| `OMP_NUM_THREADS` | Lite | Balanced | Deep |
+| --- | --- | --- | --- |
+| 1 | 0.8 s | 33.0 s | 34.7 s |
+| 2 | 0.6 s | 19.7 s | 20.7 s |
+| 4 (default) | 0.8 s | 13.0 s | 13.6 s |
+| 8 | 0.8 s | 7.6 s | 8.1 s |
+
+## Models
+
+Three tiers, all CPU-only, all downloaded from Hugging Face on first use and
+cached in the data volume. Nothing is vendored in the image.
+
+| Tier | Model | Size | Best at |
+| --- | --- | --- | --- |
+| Lite | RoBERTa-large, int8 quantised (2023) | 125 MB | Being fast and cheap. The least accurate on writing it has not seen. |
+| Balanced | Qwen3-0.6B fine-tuned, reads out at the last token | 1.1 GB | A different kind of checker rather than a sharper one. Holds the most RAM of the three. |
+| Deep | DeBERTa-v3-large trained on RAID | 1.7 GB | Accuracy. Clearly the best of the three on essays, academic prose and reviews, and it stays quiet on human text. |
 
 
 
