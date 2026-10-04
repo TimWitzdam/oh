@@ -5,9 +5,7 @@
     <br />
 </div>
 
-![GitSave 3 pages animation](https://i.imgur.com/i0SNNiL.gif)
-
-https://github.com/user-attachments/assets/301b28ca-6b72-490a-8efb-217e39fb73d3
+https://github.com/user-attachments/assets/e64ad987-3139-4928-bcc2-1b5b2f1f2e6e
 
 # oh ...
 
