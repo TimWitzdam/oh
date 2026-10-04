@@ -1,6 +1,6 @@
 <div align="center">
-    <img src="public/logo.svg" alt="oh Logo" width="120" height="120" />
-    <h1 align="center">oh</a></h1>
+    <img src="public/logo-with-text.png" alt="oh Logo" width="348" height="230" />
+    <h1 align="center">oh</h1>
     <p align="center">Self-hosted AI detector for text and pdf without GPU</p>
     <br />
 </div>

@@ -156,16 +156,6 @@ export function AnnotatedText({
         })}
         {tail}
       </p>
-
-      {onActivate ? (
-        <p className="mt-4 text-sm text-ink-soft">
-          Click a sentence to hold its score
-          {segments.some((segment) => segment.ai >= threshold)
-            ? ', or pick one from the passages below'
-            : ''}
-          .
-        </p>
-      ) : null}
     </Panel>
   );
 }
