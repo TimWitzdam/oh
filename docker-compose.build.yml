@@ -1,6 +1,8 @@
+# Builds from this checkout instead of pulling.
 services:
   oh:
-    image: timwitzdam/oh:latest
+    build: .
+    image: oh:local
     container_name: oh
     restart: unless-stopped
     ports:
@@ -23,6 +25,5 @@ services:
       start_period: 40s
 
 volumes:
-  # Pinned so the volume keeps its name when the project directory is renamed.
   oh-data:
     name: oh-data
