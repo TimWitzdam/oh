@@ -9,19 +9,98 @@ import { countWords } from './text';
 
 let inflight = 0;
 
+interface Resident {
+  detector: Detector;
+  lastUsed: number;
+}
+
+interface DetectorHost {
+  residents: Map<string, Resident>;
+  reaper?: ReturnType<typeof setInterval>;
+}
+
 // Route handlers are bundled separately, so the cache hangs off globalThis to
-// make sure every handler looks at the same set of resident weights.
-const store = globalThis as typeof globalThis & { __ohDetectors?: Map<string, Detector> };
+// make sure every handler looks at the same set of resident weights. The reaper
+// handle lives there for the same reason: without it every bundle would start
+// its own sweep over one shared map.
+const store = globalThis as typeof globalThis & { __ohDetectors?: DetectorHost };
+const host: DetectorHost = (store.__ohDetectors ??= { residents: new Map() });
 
-/** One detector per model id, reused across requests so weights load once. */
-const cache: Map<string, Detector> = (store.__ohDetectors ??= new Map());
+/**
+ * Minutes a model may go unused before its weights are dropped. Mirrors the
+ * same env var in the Python service, which sweeps its own tiers; see
+ * idle_seconds_from_env there.
+ *
+ * Unparseable values fall back to the default rather than to "never", so a typo
+ * cannot quietly leave weights resident for the life of the container. Zero and
+ * negatives are the deliberate opt-out, same as on the Python side.
+ */
+const DEFAULT_IDLE_MINUTES = 60;
+const SWEEP_MS = 60_000;
 
+function idleMs(): number {
+  const raw = process.env.OH_MODEL_IDLE_MINUTES?.trim().toLowerCase();
+  if (!raw) return DEFAULT_IDLE_MINUTES * 60_000;
+  if (raw === 'off' || raw === 'never' || raw === 'false' || raw === 'no') return 0;
+  const minutes = Number(raw);
+  if (!Number.isFinite(minutes)) return DEFAULT_IDLE_MINUTES * 60_000;
+  return minutes > 0 ? minutes * 60_000 : 0;
+}
+
+/**
+ * One detector per model id, reused across requests so weights load once.
+ */
 export function detectorFor(spec: ModelSpec): Detector {
-  const existing = cache.get(spec.id);
-  if (existing) return existing;
+  startReaper();
+  const existing = host.residents.get(spec.id);
+  if (existing) {
+    // Every run that uses a model comes through here, so this is the one place
+    // that has to be stamped for the sweep to mean anything.
+    existing.lastUsed = Date.now();
+    return existing.detector;
+  }
   const detector = createDetector(spec);
-  cache.set(spec.id, detector);
+  host.residents.set(spec.id, { detector, lastUsed: Date.now() });
   return detector;
+}
+
+function startReaper(): void {
+  if (host.reaper || idleMs() === 0) return;
+  host.reaper = setInterval(() => {
+    try {
+      sweepIdle();
+    } catch (error) {
+      console.error('[analyze] idle sweep failed', error);
+    }
+  }, SWEEP_MS);
+  // Nothing else should be holding the loop open for this handle.
+  host.reaper.unref?.();
+}
+
+/**
+ * Drops every model that has been idle past the timeout.
+ *
+ * A tick can land in the gap between detectorFor() and inflight being raised -
+ * detectorFor runs first and is synchronous, so the window is empty and nothing
+ * can observe it - which is why checking the counter is enough to keep the sweep
+ * off a model that is mid-analysis.
+ */
+function sweepIdle(): void {
+  if (inflight > 0) return;
+  const limit = idleMs();
+  if (limit === 0) return;
+
+  const now = Date.now();
+  for (const [id, resident] of host.residents) {
+    if (now - resident.lastUsed <= limit) continue;
+    // Deleting mid-iteration is defined for Map, and a released detector that
+    // somehow turns out to be in use throws here rather than failing a run.
+    host.residents.delete(id);
+    void Promise.resolve(resident.detector.release?.()).catch((error: unknown) => {
+      console.error(`[analyze] releasing ${id} failed`, error);
+    });
+    console.log(`[analyze] idle sweep dropped ${id}`);
+  }
 }
 
 export function activeInFlight(): number {

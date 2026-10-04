@@ -95,7 +95,6 @@ function sanitize(input: Partial<Settings>): Settings {
     // included, is a real override the person asked for.
     threshold: sanitizeThreshold(input.threshold),
     smoothing: Math.round(clamp(input.smoothing, 0, 3, DEFAULT_SETTINGS.smoothing)),
-    maxWords: Math.round(clamp(input.maxWords, 100, 60_000, DEFAULT_SETTINGS.maxWords)),
     batchSize: Math.round(clamp(input.batchSize, 1, 32, DEFAULT_SETTINGS.batchSize)),
   };
 }

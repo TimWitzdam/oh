@@ -17,9 +17,9 @@ is the sound you make once you find out your paper was flagged.
 
 - Automated install using Docker
 - Choose between three AI detection models
-- Analyze text and PDF files: paste, drop a file on the box, or add a PDF
-- Your text stays in the browser between visits, and never leaves the machine
-- Runs entirely on your CPU, no GPU and no accounts
+- Analyze text and PDF files
+- Automatically removes models from memory when not in use
+- Runs entirely on your CPU
 
 
 ## 🚀 Deploy oh for yourself
@@ -45,6 +45,8 @@ services:
     environment:
       # Lower this on small hosts
       OMP_NUM_THREADS: '4'
+      # Drop a model's weights after this many minutes without a run
+      OH_MODEL_IDLE_MINUTES: '60'
 
 volumes:
   oh-data:
@@ -82,6 +84,25 @@ machine: an **AMD Ryzen 7 7840U (8 cores / 16 threads)**, 32 GB RAM, Linux, with
 | 2 | 0.6 s | 19.7 s | 20.7 s |
 | 4 (default) | 0.8 s | 13.0 s | 13.6 s |
 | 8 | 0.8 s | 7.6 s | 8.1 s |
+
+### Freeing idle models
+
+Weights stay in memory after a run so the next document is instant. Left alone
+that means every tier you have ever picked is still resident hours later - try
+Balanced and Deep in one sitting and you are holding about 4.9 GB - so anything
+unused for an hour is dropped instead, and the memory goes back to the OS.
+
+Set `OH_MODEL_IDLE_MINUTES` to change the hour. `0` (or `off`) keeps weights
+resident until the container restarts, which is the old behaviour and the right
+choice on a host with RAM to spare. An unreadable value falls back to 60 rather
+than to "never", so a typo cannot quietly pin 2.7 GB forever.
+
+The cost is a reload from disk on the first run after the timeout, which the
+12,000-word timings above already include. A run in progress is never
+interrupted; the sweep only ever takes models that are sitting idle.
+
+`GET /health` on the inference service reports `loaded` and the configured
+`idleMinutes`, so you can see the sweep working.
 
 ## Models
 

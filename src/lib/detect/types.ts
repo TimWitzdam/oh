@@ -11,4 +11,10 @@ export interface Detector {
   ready(): Promise<void>;
   /** Yields one update per window, in window order. */
   score(windows: string[], signal: AbortSignal, batchSize: number): AsyncGenerator<ScoreUpdate>;
+  /**
+   * Frees whatever native memory this detector holds, for the idle sweep in
+   * lib/analyze. Optional because the torch tiers keep their weights in the
+   * Python service, which sweeps its own.
+   */
+  release?(): void | Promise<void>;
 }

@@ -190,7 +190,6 @@ export const DEFAULT_SETTINGS = {
   /** null means "use the active model's own measured default". */
   threshold: null as number | null,
   smoothing: 1,
-  maxWords: 12_000,
   batchSize: 8,
 };
 

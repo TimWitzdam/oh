@@ -108,7 +108,7 @@ function ModelCard({
           onSelect();
         }
       }}
-      className={`tile tile-hover flex cursor-pointer flex-col rounded-lg p-5 ${
+      className={`tile tile-hover @container flex cursor-pointer flex-col rounded-lg p-5 ${
         selected ? 'border-ink bg-paper' : ''
       }`}
       data-state={cardState}
@@ -123,11 +123,6 @@ function ModelCard({
           {selected ? <CheckIcon className="h-3 w-3" /> : null}
         </span>
         <h3 className="text-2xl font-semibold tracking-tight text-ink">{model.name}</h3>
-        {selected ? (
-          <span className="rounded border border-ink px-1.5 py-0.5 text-xs font-medium text-ink">
-            In use
-          </span>
-        ) : null}
       </div>
 
       <p className="mt-2 text-base text-ink-soft">{TIER_NOTE[model.tier]}</p>
@@ -168,6 +163,15 @@ function ModelCard({
   );
 }
 
+/**
+ * Label, bar, reading. The bar is the only part that gives way: it fills
+ * whatever the label and the reading leave over, and once the card is too
+ * narrow to hold the three of them in one row the reading moves up beside the
+ * label and the bar takes a full line of its own, rather than being squeezed
+ * flat to nothing. The switch is a container query on the card and not a
+ * breakpoint on the window, because a card's width comes from the grid around
+ * it; 19rem is where the middle of the row stops being a bar worth reading.
+ */
 function Meter({
   label,
   value,
@@ -179,18 +183,19 @@ function Meter({
 }) {
   const width = Math.max(6, Math.min(100, fraction * 100));
   return (
-    <div className="flex items-center gap-3">
-      <dt className="w-20 shrink-0 text-sm text-ink-soft">{label}</dt>
-      <dd className="flex flex-1 items-center gap-3">
-        <span aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-rule">
-          <span
-            className={`block h-full rounded-full ${label === 'Speed' ? 'bg-human' : 'bg-machine'}`}
-            style={{ width: `${width}%` }}
-          />
-        </span>
-        <span className="w-32 shrink-0 text-right text-sm whitespace-nowrap text-ink">
-          {value}
-        </span>
+    <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 @min-[19rem]:grid-cols-[5rem_1fr_5rem] @min-[19rem]:items-center @min-[19rem]:gap-y-0">
+      <dt className="text-sm text-ink-soft">{label}</dt>
+      <dd
+        aria-hidden
+        className="col-span-2 row-start-2 h-1.5 overflow-hidden rounded-full bg-rule @min-[19rem]:col-span-1 @min-[19rem]:col-start-2 @min-[19rem]:row-start-1"
+      >
+        <span
+          className={`block h-full rounded-full ${label === 'Speed' ? 'bg-human' : 'bg-machine'}`}
+          style={{ width: `${width}%` }}
+        />
+      </dd>
+      <dd className="col-start-2 row-start-1 text-right text-sm whitespace-nowrap text-ink @min-[19rem]:col-start-3">
+        {value}
       </dd>
     </div>
   );

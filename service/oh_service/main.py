@@ -9,15 +9,22 @@ two-logit classifier off it. `mean-pool-logit` checkpoints ship no modelling
 code at all - just a bare encoder under a `model.` prefix plus a
 `classifier.weight [1, H]` tensor - so those weights are loaded by hand and the
 score is a sigmoid over the single pooled logit.
+
+Loaded weights stay resident so a second document is instant. Left alone that
+means every tier a user has ever picked is still allocated hours later, so an
+idle sweep drops whatever has not been asked for in a while. See IDLE_SECONDS.
 """
 
 from __future__ import annotations
 
 import asyncio
+import ctypes
+import gc
 import json
 import math
 import os
 import time
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -32,7 +39,50 @@ from transformers import AutoConfig, AutoModel, AutoModelForSequenceClassificati
 DATA_DIR = Path(os.environ.get("OH_DATA_DIR", "/data")).resolve()
 MODELS_DIR = DATA_DIR / "models"
 
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+DEFAULT_IDLE_MINUTES = 60.0
+SWEEP_SECONDS = 60.0
+
+
+def idle_seconds_from_env() -> float:
+    """How long a model may go unused before its weights are dropped.
+
+    Anything unparseable falls back to the default rather than to "never", so a
+    typo in the compose file cannot quietly pin 2.7 GB resident for the life of
+    the container. `off` (or any non-positive number) is the deliberate opt-out.
+    """
+    raw = os.environ.get("OH_MODEL_IDLE_MINUTES", "").strip().lower()
+    if raw in ("off", "never", "false", "no"):
+        return 0.0
+    if not raw:
+        return DEFAULT_IDLE_MINUTES * 60
+    try:
+        minutes = float(raw)
+    except ValueError:
+        return DEFAULT_IDLE_MINUTES * 60
+    return minutes * 60 if minutes > 0 else 0.0
+
+
+IDLE_SECONDS = idle_seconds_from_env()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Runs the idle sweep for as long as the service is up.
+
+    One task, started once at startup rather than per request, so an install
+    that stops being used still gives its RAM back.
+    """
+    task = asyncio.create_task(reaper_loop()) if IDLE_SECONDS > 0 else None
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 
 class ScoreRequest(BaseModel):
@@ -52,6 +102,13 @@ class LoadedModel:
     load_ms: int
     threads: int = field(default=0)
     head: tuple[Any, Any] | None = None
+    # Monotonic, because this only ever feeds a comparison against another
+    # monotonic reading. A wall clock that steps backwards mid-eviction would
+    # otherwise make a just-used model look like it had been idle for hours.
+    last_used: float = field(default_factory=time.monotonic)
+
+    def touch(self) -> None:
+        self.last_used = time.monotonic()
 
     def pooled_logit(self, inputs: dict[str, Any]) -> float:
         assert self.head is not None
@@ -108,8 +165,73 @@ class LoadedModel:
 
 
 _loaded: dict[str, LoadedModel] = {}
+# Models being loaded or streamed right now. Held in module scope rather than on
+# LoadedModel because a model can be busy before it finishes loading, and the
+# window where it is absent from _loaded is exactly when the sweep must not
+# decide anything about it.
+_busy: set[str] = set()
 _load_lock = asyncio.Lock()
 _score_lock = asyncio.Lock()
+
+
+class InUse:
+    """Marks a model as in use for as long as a request is touching it."""
+
+    def __init__(self, model_id: str) -> None:
+        self.model_id = model_id
+
+    def __enter__(self) -> "InUse":
+        _busy.add(self.model_id)
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        _busy.discard(self.model_id)
+
+
+def trim_memory() -> None:
+    """Hands freed weights back to the OS instead of to the allocator.
+
+    Dropping the reference is only half of it. Torch's CPU tensors are large
+    posix_memalign blocks, which glibc mmaps and does return on free, but enough
+    of a 1.7 GB model ends up back in the arena free lists that RSS stays pinned
+    at the high-water mark. malloc_trim is what turns "the sweep ran" into "the
+    RAM came back"; without it the sweep is close to invisible.
+    """
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except OSError:
+        pass  # not glibc - gc.collect above is all that is on offer
+
+
+async def reap_once() -> None:
+    """Drops every model that has been idle past the timeout."""
+    now = time.monotonic()
+    async with _load_lock:
+        # Busy models are skipped rather than refused: the running request keeps
+        # its own reference, so dropping one would not break it, it would just
+        # make the next request read the weights back off disk for nothing.
+        victims = [
+            model_id
+            for model_id, loaded in _loaded.items()
+            if model_id not in _busy and now - loaded.last_used > IDLE_SECONDS
+        ]
+        for model_id in victims:
+            del _loaded[model_id]
+
+    if not victims:
+        return
+    print(f"oh idle sweep dropped: {', '.join(sorted(victims))}", flush=True)
+    await asyncio.to_thread(trim_memory)
+
+
+async def reaper_loop() -> None:
+    while True:
+        await asyncio.sleep(SWEEP_SECONDS)
+        try:
+            await reap_once()
+        except Exception as exc:  # noqa: BLE001 - a bad sweep must not end the service
+            print(f"oh idle sweep failed: {type(exc).__name__}: {exc}", flush=True)
 
 
 def manifest_for(model_id: str) -> dict[str, Any]:
@@ -181,6 +303,9 @@ async def health() -> dict[str, Any]:
         "torch": torch.__version__,
         "threads": torch.get_num_threads(),
         "loaded": sorted(_loaded),
+        # 0 means the sweep is off, which is worth being able to tell apart from
+        # "nothing has been swept yet".
+        "idleMinutes": IDLE_SECONDS / 60,
     }
 
 
@@ -190,11 +315,15 @@ async def load(request: Request) -> JSONResponse:
     model_id = str(body.get("model", ""))
     async with _load_lock:
         try:
-            loaded = await asyncio.to_thread(load_sync, model_id)
+            with InUse(model_id):
+                loaded = await asyncio.to_thread(load_sync, model_id)
         except FileNotFoundError as exc:
             return JSONResponse({"error": str(exc)}, status_code=404)
         except Exception as exc:  # noqa: BLE001 - surfaced to the UI as a message
             return JSONResponse({"error": f"{type(exc).__name__}: {exc}"}, status_code=500)
+        # Stamped inside the lock, so the sweep cannot read a timestamp from
+        # before this load and decide the fresh weights are already idle.
+        loaded.touch()
     return {
         "model": model_id,
         "loadMs": loaded.load_ms,
@@ -205,7 +334,14 @@ async def load(request: Request) -> JSONResponse:
 @app.post("/score")
 async def score(request: Request, body: ScoreRequest) -> StreamingResponse:
     try:
-        loaded = await asyncio.to_thread(load_sync, body.model)
+        # Under the same lock as /load. Without it, a score landing while the UI
+        # warms the model loads a second copy of the same weights, and two
+        # resident copies of a 1.7 GB model is exactly what this sweep exists
+        # to stop happening.
+        async with _load_lock:
+            with InUse(body.model):
+                loaded = await asyncio.to_thread(load_sync, body.model)
+            loaded.touch()
     except FileNotFoundError as exc:
         return JSONResponse({"error": str(exc)}, status_code=404)
     except Exception as exc:  # noqa: BLE001
@@ -213,14 +349,19 @@ async def score(request: Request, body: ScoreRequest) -> StreamingResponse:
 
     async def stream():
         async with _score_lock:
-            for index, text in enumerate(body.texts):
-                if await request.is_disconnected():
-                    return
-                try:
-                    ai = await asyncio.to_thread(loaded.score, text)
-                except Exception as exc:  # noqa: BLE001
-                    yield json.dumps({"error": f"{type(exc).__name__}: {exc}"}) + "\n"
-                    return
-                yield json.dumps({"index": index, "ai": round(ai, 6)}) + "\n"
+            # Busy for the length of the stream rather than just the load: a
+            # long document runs for minutes, and an eviction landing mid-stream
+            # would send the next batch back to disk.
+            with InUse(body.model):
+                for index, text in enumerate(body.texts):
+                    if await request.is_disconnected():
+                        return
+                    try:
+                        ai = await asyncio.to_thread(loaded.score, text)
+                    except Exception as exc:  # noqa: BLE001
+                        yield json.dumps({"error": f"{type(exc).__name__}: {exc}"}) + "\n"
+                        return
+                    loaded.touch()
+                    yield json.dumps({"index": index, "ai": round(ai, 6)}) + "\n"
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")
