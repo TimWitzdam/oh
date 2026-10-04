@@ -134,6 +134,13 @@ implied. See `THIRD_PARTY_NOTICES.md` for licences.
 
 Requires Node 22 and Python 3.11 or newer.
 
+The table above is produced by `scripts/fetch-eval-set.py` and the two eval
+scripts. **[docs/EVAL-HARNESS.md](docs/EVAL-HARNESS.md)** explains how the sets
+are built, why the domain-only baseline is checked before any model is scored
+against them, what the current numbers are, and how to confirm a running
+container is actually serving your build. Read it before changing a checkpoint,
+a default threshold, or the sampling.
+
 ```bash
 npm install
 npm run dev            # http://localhost:3000
