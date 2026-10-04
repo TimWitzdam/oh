@@ -78,8 +78,14 @@ optimistic:
 | --- | --- | --- | --- | --- |
 | Deep — desklib v1.01 | `liamdugan/raid` | 0.9849 | **0.9682** | 1.0000 |
 | ex-Deep — textsight-v23 | unstated (benchmarks RAID `train_none`) | 0.8562 | 0.8154 | 1.0000 |
-| Lite — chatgpt-detector-roberta | HC3, **no held-out** | 0.7384 | 0.7862 | 1.0000 |
+| Lite — chatgpt-detector-roberta (int8, shipped) | HC3, **no held-out** | 0.7384 | 0.7949 | 1.0000 |
 | Balanced — qwen3-0.6b-variable | `rasbt/human-vs-ai-50k` | 0.8071 | **0.5977** | 0.9792 |
+
+Each row is one checkpoint measured one way. Lite is the int8 ONNX export the
+tier actually ships, via `eval-detectors.mjs`; its fp32 PyTorch weights read
+0.7400 / 0.7862 / 1.0000, so quantisation costs nothing measurable here — but
+they are a different checkpoint and the two must not be mixed in a row. An
+earlier draft of this table did exactly that.
 
 `control` is the only set clean for all four. Balanced is the only checkpoint
 with no contamination anywhere, so its out-of-domain numbers are its honest ones.
