@@ -9,8 +9,10 @@ Two output shapes per candidate:
     order can be checked by hand instead of trusting id2label;
   * AUROC / TPR@FPR / threshold over the labelled sets from
     `python3 scripts/fetch-eval-set.py`, using the same scoring each model is
-    shipped with - the textsight logit margin included, because its softmax
-    saturates and is the reason the deep tier needs the special case at all.
+    shipped with. Every set is printed with a domain-only baseline - the AUROC
+    of the best "this came from domain D" guess - because a set whose halves
+    differ in domain as well as in authorship measures the sampling, not the
+    detector, and that has happened here before.
 
 Needs a torch install: `service/.venv`, or the image this repo ships, which has
 one at /srv/venv.
@@ -45,8 +47,9 @@ PASSAGES = [
 ]
 
 CANDIDATES = {
-    # The shipped deep tier, plus the same weights scored the naive way, so the
-    # logit-margin special case earns its place in the catalog.
+    # The deep tier textsight-v23 replaced, plus the same weights scored the
+    # naive way, so the logit-margin special case it needed can be compared
+    # against the plain softmax rather than assumed.
     "textsight_v23": {
         "repo": "textsightai/textsight-detector-v23-custom",
         "readout": "cls",
@@ -108,13 +111,16 @@ def build(spec):
         # checkpoint nests the encoder under `model.` (as a
         # DebertaV2ForSequenceClassification would) and adds
         # `classifier.weight [1, 1024]`, so from_pretrained silently builds a
-        # random encoder. The weights are loaded by hand instead.
+        # random encoder. The weights are loaded by hand instead - and built
+        # from the config, not from_pretrained, because reading the 1.7 GB
+        # checkpoint only to discard every key in it doubles both the load time
+        # and the peak memory for nothing.
         from huggingface_hub import hf_hub_download
         from safetensors.torch import load_file
 
         config = AutoConfig.from_pretrained(spec["repo"])
         config.architectures = ["DebertaV2Model"]
-        encoder = AutoModel.from_pretrained(spec["repo"], config=config, ignore_mismatched_sizes=True)
+        encoder = AutoModel.from_config(config)
         blob = load_file(hf_hub_download(spec["repo"], "model.safetensors"))
         weight = blob["classifier.weight"].float()
         bias = blob["classifier.bias"].float()
@@ -233,6 +239,44 @@ def tpr_at(pairs, threshold):
     return sum(1 for score in ai if score >= threshold) / len(ai) if ai else float("nan")
 
 
+def domain_baseline(rows):
+    """AUROC of the best one-domain guess - 'this came from domain D' - over D.
+
+    No weights, no inference. If this is high the two halves of the set differ
+    in domain as well as in authorship, every detector is being handed the same
+    shortcut, and a model's AUROC here is partly a measurement of the sampling.
+    Reported next to every model's number so a set that cannot support a
+    comparison says so before the comparison is believed.
+    """
+    best = 0.0
+    for domain in sorted({row["domain"] for row in rows}):
+        score = auroc([(row["label"], 1.0 if row["domain"] == domain else 0.0) for row in rows])
+        if score == score and score > best:
+            best = score
+    return best
+
+
+def decide_ai_index(spec, variant, sets, caches):
+    """Which logit means "machine written" is a property of the checkpoint, not
+    of the dataset, so it is decided once per scoring variant from every set at
+    once and then applied everywhere.
+
+    This used to be decided per set, independently, by keeping whichever index
+    scored the higher AUROC. That reports max(auroc, 1 - auroc) for each set on
+    its own, so a candidate at 0.64 could never read below 0.5, the number moved
+    when the sets changed, and a model that simply reads the domain cue in one
+    set was rewarded for it.
+    """
+    totals = [0.0, 0.0]
+    for set_name, rows in sets:
+        scores = [variant_scores(spec, variant, logits) for logits in caches[set_name]]
+        for index in (0, 1):
+            value = auroc([(row["label"], score[index]) for row, score in zip(rows, scores)])
+            if value == value:
+                totals[index] += value
+    return 0 if totals[0] >= totals[1] else 1
+
+
 def report(name, rows, scores, ai_index):
     pairs = [(row["label"], scores[i][ai_index]) for i, row in enumerate(rows)]
     humans = sorted(score for label, score in pairs if label == 0)
@@ -258,6 +302,7 @@ def report(name, rows, scores, ai_index):
         "acc5": correct / len(pairs),
         "cutoff5": at5,
         "human_median": quantile(humans, 0.5),
+        "domain_baseline": domain_baseline(rows),
         "domains": per_domain,
     }
 
@@ -288,7 +333,10 @@ def main():
     sets = load_sets(["raid", "control", "hc3"], limit)
     for name, rows in sets:
         humans = sum(1 for row in rows if row["label"] == 0)
-        print(f"eval/{name}.jsonl: {len(rows)} docs ({humans} human)")
+        domains = len({row["domain"] for row in rows})
+        baseline = domain_baseline(rows)
+        print(f"eval/{name}.jsonl: {len(rows)} docs ({humans} human, {domains} domains)")
+        print(f"  domain-only AUROC {baseline:.4f}" + ("   <- set is domain-confounded" if baseline > 0.75 else ""))
 
     for name in names:
         spec = CANDIDATES.get(name)
@@ -306,35 +354,50 @@ def main():
                     pretty = "  ".join(f"p{i}={p * 100:5.1f}%" for i, p in enumerate(scores))
                     print(f"   [{variant}] {kind:<14} {pretty}")
 
+            # Score every set before deciding anything, so the label order can be
+            # settled once for the whole candidate instead of once per set.
+            caches = {}
             for set_name, rows in sets:
                 infer_started = time.perf_counter()
                 cache = []
                 for i, row in enumerate(rows):
                     cache.append(logit_fn(row["text"]))
+                    # A DeBERTa-large pass over the full sets takes half an hour,
+                    # so this is the only thing telling you it is still going.
                     if (i + 1) % 100 == 0:
-                        print(f"   ...{i + 1}/{len(rows)}", flush=True)
+                        print(f"   {set_name} ...{i + 1}/{len(rows)}", flush=True)
+                caches[set_name] = cache
                 per_doc = (time.perf_counter() - infer_started) / len(rows)
-                for variant in spec["variants"]:
-                    scores = [variant_scores(spec, variant, logits) for logits in cache]
-                    results = [report(set_name, rows, scores, index) for index in (0, 1)]
-                    best = max(results, key=lambda r: r["auroc"])
-                    other = min(results, key=lambda r: r["auroc"])
-                    note = "  (both look alike, verify by hand)" if abs(best["auroc"] - other["auroc"]) < 0.02 else ""
+                print(f"   {set_name}: {per_doc * 1000:.0f}ms/doc", flush=True)
+
+            for variant in spec["variants"]:
+                ai_index = decide_ai_index(spec, variant, sets, caches)
+                for set_name, rows in sets:
+                    scores = [variant_scores(spec, variant, logits) for logits in caches[set_name]]
+                    result = report(set_name, rows, scores, ai_index)
+                    flipped = auroc([(row["label"], score[1 - ai_index]) for row, score in zip(rows, scores)])
+                    note = ""
+                    if flipped > result["auroc"] + 0.02:
+                        note = f"  (label order disagrees here: index {1 - ai_index} would read {flipped:.3f})"
+                    print(f"   {set_name} [{variant}]: ai = score {ai_index}{note}")
                     print(
-                        f"   {set_name} [{variant}]: {per_doc * 1000:.0f}ms/doc, "
-                        f"ai = score {best['ai_index']}{note}"
+                        f"     AUROC {result['auroc']:.4f}   TPR@1%FPR {result['tpr1'] * 100:.1f}%"
+                        f"   TPR@5%FPR {result['tpr5'] * 100:.1f}%   acc@5%FPR {result['acc5'] * 100:.1f}%"
+                        f"   thr@5%FPR {result['cutoff5']:.4f}   human median {result['human_median']:.3f}"
                     )
-                    print(
-                        f"     AUROC {best['auroc']:.4f}   TPR@1%FPR {best['tpr1'] * 100:.1f}%"
-                        f"   TPR@5%FPR {best['tpr5'] * 100:.1f}%   acc@5%FPR {best['acc5'] * 100:.1f}%"
-                        f"   thr@5%FPR {best['cutoff5']:.4f}   human median {best['human_median']:.3f}"
-                    )
-                    if best["domains"]:
-                        weakest = "  ".join(f"{d} {a:.3f} (n={n})" for d, a, n in best["domains"][:3])
+                    if result["domain_baseline"] > 0.75:
+                        print(
+                            f"     domain-only baseline {result['domain_baseline']:.4f} - the halves "
+                            "differ in domain, so this figure is not a detector result"
+                        )
+                    if result["domains"]:
+                        weakest = "  ".join(f"{d} {a:.3f} (n={n})" for d, a, n in result["domains"][:3])
                         print(f"     weakest domains: {weakest}")
+                    elif result["domain_baseline"] <= 0.75:
+                        print("     no domain has 10 human and 10 machine documents")
                     if sweep:
                         for threshold in (0.5, 0.7, 0.8, 0.9, 0.93, 0.95, 0.97, 0.99):
-                            fpr, tpr = rates(rows, scores, best["ai_index"], threshold)
+                            fpr, tpr = rates(rows, scores, ai_index, threshold)
                             print(f"       thr {threshold:.2f}  TPR {tpr * 100:5.1f}%  FPR {fpr * 100:5.1f}%")
         except Exception as exc:  # noqa: BLE001
             print(f"\n=== {name}  FAILED after {time.perf_counter() - started:.1f}s: {type(exc).__name__}: {exc}")

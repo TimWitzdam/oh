@@ -33,11 +33,21 @@ export interface ModelSpec {
   /** Optional calibration: divide logits by this before softmax. */
   temperature?: number;
   /**
-   * Default highlight threshold for this model, measured on labelled text the
-   * model was not trained on (see scripts/fetch-eval-set.py). Detector scores
-   * are not probabilities and sit in different places on every model, so one
-   * shared default either floods a document with underlines or hides everything.
-   * The user can override it; this is what an untouched install uses.
+   * Default highlight threshold for this model. Detector scores are not
+   * probabilities and sit in different places on every model, so one shared
+   * default either floods a document with underlines or hides everything. The
+   * user can override it; this is what an untouched install uses.
+   *
+   * PROVENANCE - the figures quoted in the per-model comments below were
+   * measured with the first version of scripts/fetch-eval-set.py, whose MAGE
+   * "control" set put all 80 of its machine documents in one domain
+   * (ChangeMyView continuations from small models) against 64 human documents
+   * from eight others, so that a one-line `src.startswith("cmv")` scored
+   * AUROC 0.9375 on it. Anything sourced from that set measures the sampling
+   * rather than the detector. RAID is additionally in-domain for the Deep
+   * weights and HC3 is in-domain for the Lite checkpoint. Re-measure with
+   * `fetch-eval-set.py` then `eval_torch.py --sweep` before treating any of
+   * these as settled, and prefer a set whose domain-only baseline is near 0.5.
    */
   threshold: number;
   /** Characters of text handed to the model per scoring pass. */
@@ -100,9 +110,17 @@ export const MODELS: ModelSpec[] = [
     quantize: false,
     readout: 'variable-eos',
     // Worth keeping as the one detector that reads the text as a language
-    // model rather than a classifier, but it is not more accurate than the
-    // Deep tier: measured on unseen domains it scores 0.68 against 0.99, and
-    // it saturates so hard that half of human documents come back above 0.9.
+    // model rather than a classifier.
+    //
+    // 0.5 is the one threshold here that is NOT measured, and it is the most
+    // suspect number in this file. The same measurement round reported that
+    // this model puts half of all human documents above 0.9, which at a 0.5 cut
+    // means underlining roughly half of human text - and it was left at 0.5
+    // anyway, because the 0.68 it was being compared on came from the
+    // domain-confounded control set (see `threshold` above). The 0.68 is not
+    // evidence that this is the weakest tier; it is evidence that the set could
+    // not tell the three apart. Re-measure with --sweep and set this from the
+    // false-positive rate, not from this comment.
     threshold: 0.5,
     windowChars: 900,
     wordsPerSecond: 195,

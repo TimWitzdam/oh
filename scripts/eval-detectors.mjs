@@ -60,7 +60,12 @@ const picked = keys.length ? keys : Object.keys(MODELS);
 
 const loaded = sets.map(loadSet);
 for (const set of loaded) {
-  if (set) console.log(`eval/${set.name}.jsonl: ${set.rows.length} docs (${set.rows.filter((r) => r.label === 0).length} human)`);
+  if (!set) continue;
+  const humans = set.rows.filter((r) => r.label === 0).length;
+  const domains = new Set(set.rows.map((r) => r.domain)).size;
+  const baseline = domainBaseline(set);
+  console.log(`eval/${set.name}.jsonl: ${set.rows.length} docs (${humans} human, ${domains} domains)`);
+  console.log(`  domain-only AUROC ${baseline.toFixed(4)}${baseline > 0.75 ? '   <- set is domain-confounded' : ''}`);
 }
 if (sets.length && loaded.some((s) => !s)) {
   console.log('run: python3 scripts/fetch-eval-set.py');
@@ -92,6 +97,9 @@ for (const key of picked) {
       console.log(`     ${kind.padEnd(14)} p0=${(p0 * 100).toFixed(1).padStart(6)}%  p1=${(p1 * 100).toFixed(1).padStart(6)}%`);
     }
 
+    // Score every set before deciding anything, so the label order can be
+    // settled once for the whole candidate instead of once per set.
+    const caches = new Map();
     for (const set of loaded) {
       if (!set) continue;
       const started = performance.now();
@@ -104,25 +112,53 @@ for (const key of picked) {
       }
       const ms = (performance.now() - started) / set.rows.length;
       process.stdout.write(' '.repeat(30) + '\r');
+      caches.set(set, { scores, ms });
+    }
 
-      // Which logit means "machine written" is a property of the checkpoint,
-      // not of the repo, so it is measured instead of read from config.
-      const byIndex = [0, 1].map((aiIndex) => report(set, scores, aiIndex));
-      const [best, other] = byIndex[0].auroc >= byIndex[1].auroc ? byIndex : [byIndex[1], byIndex[0]];
-      console.log(`   ${set.name}: ${ms.toFixed(0)}ms/doc, ai = logit ${best.aiIndex}${Math.abs(best.auroc - other.auroc) < 0.02 ? '  (both indices look alike, verify by hand)' : ''}`);
+    // Which logit means "machine written" is a property of the checkpoint, not
+    // of the dataset, so it is decided once per candidate from every set at
+    // once and then applied everywhere.
+    //
+    // This used to be decided per set, independently, by keeping whichever
+    // index scored the higher AUROC. That reports max(auroc, 1 - auroc) for
+    // each set on its own, so a candidate at 0.64 could never read below 0.5,
+    // the number moved when the sets changed, and a model that simply reads
+    // the domain cue in one set was rewarded for it.
+    const totals = [0, 0];
+    for (const set of loaded) {
+      if (!set) continue;
+      const { scores } = caches.get(set);
+      for (const aiIndex of [0, 1]) {
+        const value = auroc(set.rows.map((row, i) => [row.label, softmax(scores[i])[aiIndex]]));
+        if (!Number.isNaN(value)) totals[aiIndex] += value;
+      }
+    }
+    const aiIndex = totals[0] >= totals[1] ? 0 : 1;
+
+    for (const set of loaded) {
+      if (!set) continue;
+      const { scores, ms } = caches.get(set);
+      const result = report(set, scores, aiIndex);
+      const flipped = auroc(set.rows.map((row, i) => [row.label, softmax(scores[i])[1 - aiIndex]]));
+      const note = flipped > result.auroc + 0.02 ? `  (label order disagrees here: logit ${1 - aiIndex} would read ${flipped.toFixed(3)})` : '';
+      console.log(`   ${set.name}: ${ms.toFixed(0)}ms/doc, ai = logit ${aiIndex}${note}`);
       // `thr` is where a 5% false-positive rate puts the cut. The app ships a
-      // 0.5 default, so a threshold nowhere near 0.5 means the ranking is fine
-      // but the score is not a probability and would need recalibrating.
-      console.log(`     AUROC ${best.auroc.toFixed(4)}   TPR@1%FPR ${(best.tpr1 * 100).toFixed(1)}%   TPR@5%FPR ${(best.tpr5 * 100).toFixed(1)}%   acc@5%FPR ${(best.acc5 * 100).toFixed(1)}%   thr@5%FPR ${best.cutoff5.toFixed(4)}   human median p(ai) ${best.humanMedian.toFixed(3)}`);
-      const worst = best.domains.slice(0, 3);
+      // threshold per model now, so a score nowhere near it means the ranking
+      // is fine but the number is not a probability.
+      console.log(`     AUROC ${result.auroc.toFixed(4)}   TPR@1%FPR ${(result.tpr1 * 100).toFixed(1)}%   TPR@5%FPR ${(result.tpr5 * 100).toFixed(1)}%   acc@5%FPR ${(result.acc5 * 100).toFixed(1)}%   thr@5%FPR ${result.cutoff5.toFixed(4)}   human median p(ai) ${result.humanMedian.toFixed(3)}`);
+      if (result.domainBaseline > 0.75) {
+        console.log(`     domain-only baseline ${result.domainBaseline.toFixed(4)} - the halves differ in domain, so this figure is not a detector result`);
+      }
+      const worst = result.domains.slice(0, 3);
       if (worst.length) console.log(`     weakest domains: ${worst.map((d) => `${d.name} ${d.auroc.toFixed(3)} (n=${d.n})`).join('  ')}`);
+      else if (result.domainBaseline <= 0.75) console.log('     no domain has 10 human and 10 machine documents');
 
-      // The app ships a fixed highlight threshold, so a candidate is only
+      // The app ships a measured threshold per model, so a candidate is only
       // shippable if some threshold keeps the false-positive rate sane on every
       // set at once. AUROC alone does not say whether one exists.
       if (args.includes('--sweep')) {
         for (const threshold of [0.5, 0.7, 0.8, 0.9, 0.93, 0.95, 0.97, 0.99]) {
-          const { fpr, tpr } = rates(set, scores, best.aiIndex, threshold);
+          const { fpr, tpr } = rates(set, scores, aiIndex, threshold);
           console.log(`       thr ${threshold.toFixed(2)}  TPR ${(tpr * 100).toFixed(1).padStart(5)}%  FPR ${(fpr * 100).toFixed(1).padStart(5)}%`);
         }
       }
@@ -174,8 +210,27 @@ function report(set, scores, aiIndex) {
     acc5: correct / pairs.length,
     cutoff5: at5,
     humanMedian: quantile(humans, 0.5),
+    domainBaseline: domainBaseline(set),
     domains: perDomain,
   };
+}
+
+/**
+ * AUROC of the best one-domain guess - 'this came from domain D' - over D. No
+ * weights, no inference. If this is high the two halves of the set differ in
+ * domain as well as in authorship, every detector is handed the same shortcut,
+ * and a model's AUROC here is partly a measurement of the sampling. Printed next
+ * to every model's number so a set that cannot support a comparison says so
+ * before the comparison is believed.
+ */
+function domainBaseline(set) {
+  let best = 0;
+  for (const name of new Set(set.rows.map((row) => row.domain))) {
+    const pairs = set.rows.map((row) => [row.label, row.domain === name ? 1 : 0]);
+    const value = auroc(pairs);
+    if (!Number.isNaN(value) && value > best) best = value;
+  }
+  return best;
 }
 
 /** False- and true-positive rates at one fixed threshold. */

@@ -92,7 +92,13 @@ cached in the data volume. Nothing is vendored in the image.
 | --- | --- | --- | --- |
 | Lite | RoBERTa-large, int8 quantised (2023) | 125 MB | Being fast and cheap. The least accurate on writing it has not seen. |
 | Balanced | Qwen3-0.6B fine-tuned, reads out at the last token | 1.1 GB | A different kind of checker rather than a sharper one. Holds the most RAM of the three. |
-| Deep | DeBERTa-v3-large trained on RAID | 1.7 GB | Accuracy. Clearly the best of the three on essays, academic prose and reviews, and it stays quiet on human text. |
+| Deep | DeBERTa-v3-large trained on RAID | 1.7 GB | Accuracy on RAID-style domains, which is what it was trained on. |
+
+The tier ordering above is **not yet measured on a trustworthy set.** The
+comparison that put Deep here was run against an eval set whose machine half
+came from a single domain, where a one-line domain check scored AUROC 0.94; see
+`scripts/fetch-eval-set.py`. The default highlight thresholds are provisional
+for the same reason. Re-run the numbers before treating this table as fact.
 
 
 
