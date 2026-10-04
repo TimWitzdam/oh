@@ -143,20 +143,6 @@ export function SettingsPanel({
           </Field>
 
           <Field
-            label="Words per run"
-            hint="Longer texts are analysed window by window, so this is a guard rail rather than a real limit."
-          >
-            <NumberInput
-              value={settings.maxWords}
-              min={200}
-              max={20000}
-              step={200}
-              onCommit={(value) => onPatch({ maxWords: value })}
-              suffix="words"
-            />
-          </Field>
-
-          <Field
             label="Windows per batch"
             hint="How many windows are scored at once. Higher uses more CPU but finishes sooner."
           >

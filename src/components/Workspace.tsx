@@ -14,13 +14,11 @@ export function Workspace({
   model,
   models,
   threshold,
-  maxWords,
   onSelectModel,
 }: {
   model: ModelInfo;
   models: ModelInfo[];
   threshold: number;
-  maxWords: number;
   onSelectModel: (modelId: string) => void;
 }) {
   const draft = useDraft();
@@ -32,7 +30,6 @@ export function Workspace({
       <Composer
         model={model}
         models={models}
-        maxWords={maxWords}
         draft={draft}
         busy={analysis.busy}
         onRun={analysis.run}
@@ -79,7 +76,7 @@ export function Workspace({
           text={analysis.analyzedText}
           stale={analysis.analyzedText !== draft.text}
           onReanalyse={() => analysis.run(draft.text)}
-          canReanalyse={!analysis.busy && words >= MIN_WORDS && words <= maxWords}
+          canReanalyse={!analysis.busy && words >= MIN_WORDS}
           threshold={threshold}
         />
       ) : null}

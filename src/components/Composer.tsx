@@ -38,7 +38,6 @@ function useIsMac(): boolean {
 export function Composer({
   model,
   models,
-  maxWords,
   draft,
   busy,
   onRun,
@@ -47,7 +46,6 @@ export function Composer({
 }: {
   model: ModelInfo;
   models: ModelInfo[];
-  maxWords: number;
   draft: Draft;
   busy: boolean;
   onRun: (text: string) => void;
@@ -69,8 +67,7 @@ export function Composer({
   const words = useMemo(() => countWords(text), [text]);
   const empty = words === 0;
   const short = words < MIN_WORDS;
-  const overLimit = words > maxWords;
-  const canRun = !short && !overLimit && !busy;
+  const canRun = !short && !busy;
   /** Untouched since the page opened, so it is the text from the last visit. */
   const restored = atLoad !== null && text === atLoad;
 
@@ -263,12 +260,7 @@ export function Composer({
                 minimum
               </span>
             ) : null}
-            {overLimit ? (
-              <span className="text-danger">
-                Over the {maxWords.toLocaleString()} word limit
-              </span>
-            ) : null}
-            {!short && !overLimit ? (
+            {!short ? (
               <span>
                 {formatDuration(estimateSeconds(words, model.wordsPerSecond))} on {model.name}
               </span>

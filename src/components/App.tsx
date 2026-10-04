@@ -170,7 +170,6 @@ export function App({ initialState }: { initialState: AppState }) {
             model={activeModel}
             models={models}
             threshold={state.settings.threshold ?? activeModel.threshold}
-            maxWords={state.settings.maxWords}
             onSelectModel={(modelId) => void patch({ activeModelId: modelId })}
           />
         ) : (
