@@ -32,8 +32,6 @@ docker run -d --restart=unless-stopped -p 3000:3000 -v oh-data:/data --name oh t
 
 ### Docker compose
 
-1. Create `docker-compose.yml` file
-
 ```yaml
 services:
   oh:
