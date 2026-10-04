@@ -123,11 +123,6 @@ function ModelCard({
           {selected ? <CheckIcon className="h-3 w-3" /> : null}
         </span>
         <h3 className="text-2xl font-semibold tracking-tight text-ink">{model.name}</h3>
-        {selected ? (
-          <span className="rounded border border-ink px-1.5 py-0.5 text-xs font-medium text-ink">
-            In use
-          </span>
-        ) : null}
       </div>
 
       <p className="mt-2 text-base text-ink-soft">{TIER_NOTE[model.tier]}</p>

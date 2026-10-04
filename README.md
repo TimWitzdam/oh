@@ -17,10 +17,9 @@ is the sound you make once you find out your paper was flagged.
 
 - Automated install using Docker
 - Choose between three AI detection models
-- Analyze text and PDF files: paste, drop a file on the box, or add a PDF
-- Your text stays in the browser between visits, and never leaves the machine
-- Runs entirely on your CPU, no GPU and no accounts
-- Gives the memory back: a model you have not used for an hour is dropped from RAM
+- Analyze text and PDF files
+- Automatically removes models from memory when not in use
+- Runs entirely on your CPU
 
 
 ## 🚀 Deploy oh for yourself
