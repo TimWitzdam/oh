@@ -60,6 +60,23 @@ export class OnnxClassifierDetector implements Detector {
     this.pipeline = { model, tokenizer };
   }
 
+  /**
+   * Hands the onnxruntime session back. The arena those tensors live in is
+   * native memory, so dropping the last JS reference frees nothing until the
+   * session is released - without this the idle sweep is decoration.
+   *
+   * Clears the memoised load too: a released detector has nothing left to
+   * serve, and `ready()` would otherwise resolve instantly against a session
+   * that is gone. Callers drop the detector entirely, so the next run builds a
+   * fresh one.
+   */
+  async release(): Promise<void> {
+    const pipeline = this.pipeline;
+    this.pipeline = null;
+    this.loading = null;
+    await pipeline?.model.dispose?.();
+  }
+
   async *score(
     windows: string[],
     signal: AbortSignal,
